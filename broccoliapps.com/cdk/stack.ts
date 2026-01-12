@@ -14,4 +14,5 @@ new AppBuilder(AWS_ACCOUNT_ID, AWS_REGION, "broccoliapps-com", "prod")
   .withCloudFrontFn(path.join(__dirname, "cloudfront-fn.js"))
   .withApi(path.join(__dirname, "../dist/api"))
   .withSsr(path.join(__dirname, "../dist/ssr"))
+  .withStatic(path.join(__dirname, "../dist/static"))
   .build();

@@ -1,5 +1,6 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
+import { getUser } from "../../../shared/api-contracts";
 
 export type UserDetailProps = {
   id?: string;
@@ -13,12 +14,10 @@ export const UserDetailPage = ({ id, name: initialName, email: initialEmail }: U
 
   useEffect(() => {
     if (!initialName && id) {
-      fetch(`/api/users/${id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setUser({ name: data.name, email: data.email });
-          setLoading(false);
-        });
+      getUser.invoke({ id }).then((data) => {
+        setUser({ name: data.name, email: data.email });
+        setLoading(false);
+      });
     }
   }, [id, initialName]);
 

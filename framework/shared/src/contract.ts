@@ -34,6 +34,15 @@ const extractPathParams = (path: string): string[] => {
   return matches ? matches.map((m) => m.slice(1)) : [];
 };
 
+// SHA256 hash for request body (required by CloudFront with IAM auth)
+const sha256 = async (message: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
 // API contract with invoke method
 export class ApiContract<TReq extends Record<string, unknown>, TRes> {
   readonly _response!: TRes; // phantom type for type inference
@@ -77,10 +86,21 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
       }
     }
 
+    // Build headers
+    const headers: Record<string, string> = {};
+    let body: string | undefined;
+
+    if (hasBody) {
+      body = JSON.stringify(remaining);
+      headers["Content-Type"] = "application/json";
+      // SHA256 hash required by CloudFront with IAM auth for POST/PUT
+      headers["x-amz-content-sha256"] = await sha256(body);
+    }
+
     const response = await fetch(url, {
       method: this.method,
-      headers: hasBody ? { "Content-Type": "application/json" } : undefined,
-      body: hasBody ? JSON.stringify(remaining) : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      body,
     });
 
     if (!response.ok) {

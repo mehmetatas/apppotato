@@ -13,6 +13,10 @@ export const listUsers = api("GET", "/users").withResponse<{
   users: { id: number; name: string }[];
 }>();
 
+export const getUser = api("GET", "/users/:id")
+  .withRequest({ id: v.string() })
+  .withResponse<{ id: string; name: string; email: string }>();
+
 export const deleteUser = api("DELETE", "/users/:id").withRequest({
   id: coerceNumber(),
 });

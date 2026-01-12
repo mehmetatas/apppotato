@@ -12,6 +12,8 @@ import {
   aws_cloudfront_origins as origins,
   aws_route53 as route53,
   aws_route53_targets as route53targets,
+  aws_s3 as s3,
+  aws_s3_deployment as s3deploy,
 } from "aws-cdk-lib";
 import fs from "fs";
 
@@ -52,8 +54,10 @@ export class AppBuilder {
 
   private apiLambdaDef?: LambdaDef;
   private cloudfrontFnPath?: string;
+  private staticPath?: string;
 
   private apiLambda?: lambda.Function;
+  private staticBucket?: s3.Bucket;
 
   constructor(
     private readonly account: string,
@@ -124,6 +128,30 @@ export class AppBuilder {
   public withCloudFrontFn(path: string) {
     this.cloudfrontFnPath = path;
     return this;
+  }
+
+  public withStatic(path: string) {
+    this.staticPath = path;
+    return this;
+  }
+
+  private configureStaticBucket(): s3.Bucket {
+    const bucket = new s3.Bucket(this.stack, this.resourceName("static-bucket"), {
+      bucketName: this.resourceName("static"),
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: this.isProd() ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: !this.isProd(),
+    });
+
+    // Deploy static files to S3 under /static/ prefix
+    new s3deploy.BucketDeployment(this.stack, this.resourceName("static-deploy"), {
+      sources: [s3deploy.Source.asset(this.staticPath!)],
+      destinationBucket: bucket,
+      destinationKeyPrefix: "static",
+      cacheControl: [s3deploy.CacheControl.maxAge(cdk.Duration.days(365))],
+    });
+
+    return bucket;
   }
 
   private configureLambda(name: string, { path, config }: LambdaDef): lambda.Function {
@@ -242,6 +270,18 @@ export class AppBuilder {
       });
     }
 
+    // Add S3 as /static/* origin
+    if (this.staticBucket) {
+      const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(this.staticBucket, {
+        originId: this.resourceName("static-origin"),
+      });
+      distribution.addBehavior("/static/*", s3Origin, {
+        compress: true,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      });
+    }
+
     // Allow CloudFront distribution to invoke SSR and API lambdas
     this.grantLambdaInvoke(distribution, "ssr");
     this.grantLambdaInvoke(distribution, "api");
@@ -320,6 +360,10 @@ export class AppBuilder {
 
     if (this.apiLambdaDef) {
       this.apiLambda = this.configureLambda("api", this.apiLambdaDef);
+    }
+
+    if (this.staticPath) {
+      this.staticBucket = this.configureStaticBucket();
     }
 
     const distribution = this.configureCloudFront();
