@@ -1,0 +1,27 @@
+{
+  "name": "@broccoliapps/framework-dev-tools",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc",
+    "clean": "rm -rf dist/"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.7",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

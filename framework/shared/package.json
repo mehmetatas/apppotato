@@ -1,0 +1,38 @@
+{
+  "name": "@broccoliapps/framework-shared",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./coerce": {
+      "types": "./dist/coerce.d.ts",
+      "import": "./dist/coerce.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc",
+    "clean": "rm -rf dist/"
+  },
+  "peerDependencies": {
+    "valibot": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

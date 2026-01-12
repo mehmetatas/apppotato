@@ -5,18 +5,21 @@
   "type": "module",
   "workspaces": [
     "framework/*",
-    "broccoliapps.com/*",
+    "broccoliapps.com",
     "expense-tracker/*"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build:framework": "npm run build -w @broccoliapps/framework-shared && npm run build -w @broccoliapps/framework-backend -w @broccoliapps/framework-frontend -w @broccoliapps/infra -w @broccoliapps/framework-dev-tools",
+    "build": "npm run build:framework",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "clean": "npm run clean --workspaces --if-present"
+    "clean": "npm run clean --workspaces --if-present",
+    "dotcom": "npm run local -w @broccoliapps/dotcom",
+    "deploy:dotcom": "npm run build:framework && npm run deploy -w @broccoliapps/dotcom"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

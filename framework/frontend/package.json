@@ -1,0 +1,26 @@
+{
+  "name": "@broccoliapps/framework-frontend",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc",
+    "clean": "rm -rf dist/"
+  },
+  "dependencies": {
+    "@broccoliapps/framework-shared": "file:../shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -14,10 +14,6 @@ import {
   aws_route53_targets as route53targets,
 } from "aws-cdk-lib";
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export type Env = "prod" | string;
 
@@ -26,31 +22,12 @@ export type LambdaConfig = Pick<
   "memorySize" | "timeout" | "environment" | "reservedConcurrentExecutions"
 >;
 
-export type CognitoConfig = {
-  google?: {
-    clientId: string;
-    clientSecret: string;
-  };
-  apple?: {
-    servicesId: string;
-    teamId: string;
-    keyId: string;
-    privateKey: string;
-  };
-  facebook?: {
-    appId: string;
-    appSecret: string;
-  };
-  email?: true;
-};
-
 export const defaultConfig = {
   lambda: {
     memorySize: 256,
     timeout: cdk.Duration.seconds(10),
     environment: {},
     reservedConcurrentExecutions: 10,
-    permissions: [] as Permissions[],
   } as LambdaConfig,
   table: {
     gsiCount: 5,
@@ -74,15 +51,9 @@ export class AppBuilder {
   private sslCertArn!: string;
 
   private apiLambdaDef?: LambdaDef;
-  private jobsLambdaDef?: LambdaDef;
-  private eventsLambdaDef?: LambdaDef;
-  private stripeLambdaDef?: LambdaDef;
   private cloudfrontFnPath?: string;
 
   private apiLambda?: lambda.Function;
-  private eventsLambda?: lambda.Function;
-  private jobsLambda?: lambda.Function;
-  private stripeLambda?: lambda.Function;
 
   constructor(
     private readonly account: string,
@@ -147,37 +118,6 @@ export class AppBuilder {
 
   public withSsr(path: string, config?: LambdaConfig) {
     this.ssrLambdaDef = { path, config };
-    return this;
-  }
-
-  public withEvents(path: string, config?: LambdaConfig) {
-    this.eventsLambdaDef = { path, config };
-    return this;
-  }
-
-  public withJobs(path: string, config?: LambdaConfig) {
-    this.jobsLambdaDef = { path, config };
-    return this;
-  }
-
-  public withScheduledJob(name: string, schedule: string, payload: object) {
-    return this;
-  }
-
-  public withStripe(path: string, eventBusArn: string, config?: LambdaConfig) {
-    this.stripeLambdaDef = { path, config };
-    return this;
-  }
-
-  public withCdn() {
-    return this;
-  }
-
-  public withSignIn(cognito: CognitoConfig) {
-    return this;
-  }
-
-  public withDashboard() {
     return this;
   }
 
@@ -255,9 +195,7 @@ export class AppBuilder {
             functionName: this.resourceName("cf-function"),
             runtime: cloudfront.FunctionRuntime.JS_2_0,
             // https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html#functions-event-structure-example
-            code: cloudfront.FunctionCode.fromInline(
-              fs.readFileSync(path.join(__dirname, "cloudfront-fn/handler.js"), "utf8")
-            ),
+            code: cloudfront.FunctionCode.fromInline(fs.readFileSync(this.cloudfrontFnPath!, "utf8")),
           }),
           eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
         },
@@ -382,15 +320,6 @@ export class AppBuilder {
 
     if (this.apiLambdaDef) {
       this.apiLambda = this.configureLambda("api", this.apiLambdaDef);
-    }
-    if (this.jobsLambdaDef) {
-      this.jobsLambda = this.configureLambda("jobs", this.jobsLambdaDef);
-    }
-    if (this.eventsLambdaDef) {
-      this.eventsLambda = this.configureLambda("events", this.eventsLambdaDef);
-    }
-    if (this.stripeLambdaDef) {
-      this.stripeLambda = this.configureLambda("stripe", this.stripeLambdaDef);
     }
 
     const distribution = this.configureCloudFront();
