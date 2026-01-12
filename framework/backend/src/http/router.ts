@@ -37,6 +37,8 @@ export const handleError = (c: Context, error: unknown): Response => {
     );
   }
 
+  console.error("Request error:", error);
+
   if (error instanceof Error) {
     return c.json({ error: error.message }, 400);
   }

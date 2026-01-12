@@ -1,94 +1,107 @@
-import type { HttpResponse, Schema } from "@broccoliapps/framework-shared";
+import type { Cookie, Schema } from "@broccoliapps/framework-shared";
 import { emptySchema, type EmptyRequest } from "@broccoliapps/framework-shared/contract";
 import type { Context } from "hono";
-import { render } from "preact-render-to-string";
 import * as v from "valibot";
 import { RequestContext } from "../context";
 import { deserializeRequest } from "../deserializer";
 import { handleError, HttpRouter, setCookies } from "../router";
-import { HttpHandler } from "../types";
-import { createPageResponse, type PageResponse } from "./response";
-import type { PageComponent } from "./types";
 
-// Builder: after .withRequest() - must chain .handler()
-export class PageRouteBuilderWithRequest<TReq extends Record<string, unknown>, TProps> {
+/**
+ * Response from page handler - router just returns this as html
+ */
+export type PageResponse = {
+  status: number;
+  data: string;
+  cookies?: Cookie[];
+  headers?: Record<string, string>;
+};
+
+/**
+ * Handler function type
+ */
+export type PageHandlerFn<TRequest> = (
+  request: TRequest,
+  ctx: RequestContext
+) => Promise<PageResponse>;
+
+/**
+ * Builder with request schema - provides typed handle()
+ */
+class PageRouteWithRequest<TReq extends Record<string, unknown>> {
   constructor(
-    protected router: PageRouter,
-    protected path: string,
-    protected Component: PageComponent<TProps>,
-    protected schema: Schema<TReq>
+    private router: PageRouter,
+    private schema: Schema<TReq>
   ) {}
 
-  handler(
-    fn: (req: TReq, res: PageResponse<TProps>, ctx: RequestContext) => Promise<HttpResponse<TProps>>
-  ): PageRouter {
-    const res = createPageResponse<TProps>();
-    this.router["registerPage"](this.path, this.schema, this.Component, (req: TReq, ctx: RequestContext) =>
-      fn(req, res, ctx)
-    );
+  handle(path: string, fn: PageHandlerFn<TReq>): PageRouter {
+    this.router["registerRoute"](path, this.schema, fn);
     return this.router;
   }
 }
 
-// Builder: after .route() - can chain .withRequest() or .handler()
-export class PageRouteBuilder<TProps> extends PageRouteBuilderWithRequest<EmptyRequest, TProps> {
-  constructor(router: PageRouter, path: string, Component: PageComponent<TProps>) {
-    super(router, path, Component, emptySchema);
-  }
-
-  withRequest<TReq extends v.ObjectEntries>(
-    entries: TReq
-  ): PageRouteBuilderWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>, TProps> {
-    const schema = v.object(entries);
-    return new PageRouteBuilderWithRequest(this.router, this.path, this.Component, schema);
-  }
-}
-
+/**
+ * Router for page routes.
+ *
+ * @example
+ * // Simple route (no params)
+ * page.handle("/users", async () => {
+ *   return render(<UsersListPage users={users} />).withOptions({ title: "Users" });
+ * });
+ *
+ * // Route with params
+ * page.withRequest({ id: v.string() }).handle("/users/:id", async (req) => {
+ *   return render(<UserDetailPage id={req.id} />).withOptions({ title: "User" });
+ * });
+ */
 export class PageRouter extends HttpRouter {
   /**
-   * Start building a page route
-   *
-   * @example
-   * page.route("/", HomePage)
-   *   .handler(async (_req, res) => res.render({ title: "Home" }));
-   *
-   * @example
-   * page.route("/users/:id", UserDetailPage)
-   *   .withRequest({ id: v.pipe(v.string(), v.minLength(1)) })
-   *   .handler(async (req, res) => res.render({ id: req.id, name: "Alice" }));
+   * Define request schema for typed params
    */
-  route<TProps>(path: string, Component: PageComponent<TProps>): PageRouteBuilder<TProps> {
-    return new PageRouteBuilder(this, path, Component);
+  withRequest<TReq extends v.ObjectEntries>(
+    entries: TReq
+  ): PageRouteWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>> {
+    const schema = v.object(entries);
+    return new PageRouteWithRequest(this, schema);
+  }
+
+  /**
+   * Register a route handler (no params)
+   */
+  handle(path: string, fn: PageHandlerFn<EmptyRequest>): this {
+    this.registerRoute(path, emptySchema, fn);
+    return this;
   }
 
   /**
    * Register a 404 not found handler
    */
-  notFound(Component: PageComponent<object>): this {
-    this.hono.notFound((c) => {
+  notFound(fn: PageHandlerFn<EmptyRequest>): this {
+    this.hono.notFound(async (c) => {
       if (c.req.path.startsWith("/api")) {
         return c.json({ error: "Not Found" }, 404);
       }
-      const html = "<!DOCTYPE html>" + render(Component({}));
-      return c.html(html, 404);
+
+      const ctx = new RequestContext(c);
+      const response = await fn({}, ctx);
+      return c.html(response.data, 404);
     });
     return this;
   }
 
-  private registerPage<TReq, TProps>(
+  private registerRoute<TReq>(
     path: string,
     schema: Schema<TReq>,
-    Component: PageComponent<TProps>,
-    handler: HttpHandler<TReq, TProps>
+    fn: PageHandlerFn<TReq>
   ): void {
     this.hono.get(path, async (c: Context): Promise<Response> => {
       try {
         const request = await deserializeRequest(c, "GET", schema);
         const ctx = new RequestContext(c);
-        const response = await handler(request, ctx);
+        const response = await fn(request, ctx);
+
         setCookies(c, response.cookies);
-        const html = "<!DOCTYPE html>" + render(Component(response.data));
-        return c.html(html, (response.status ?? 200) as 200, response.headers);
+
+        return c.html(response.data, response.status as 200, response.headers);
       } catch (error) {
         return handleError(c, error);
       }

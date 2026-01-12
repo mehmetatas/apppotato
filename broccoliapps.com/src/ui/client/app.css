@@ -1,0 +1,248 @@
+/* Base reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  font-family: "Nunito", system-ui, sans-serif;
+  background: linear-gradient(135deg, #f0f9f0 0%, #e8f5e9 50%, #c8e6c9 100%);
+  color: #333;
+}
+
+/* Layout */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+  text-decoration: none;
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.nav a {
+  text-decoration: none;
+  color: #558b2f;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.nav a:hover,
+.nav a.active {
+  color: #2e7d32;
+}
+
+/* Main content */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Footer */
+.footer {
+  padding: 1.5rem 2rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.5);
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Page-specific styles */
+
+/* Home page */
+.home-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+}
+
+.broccoli-svg {
+  width: 200px;
+  height: 200px;
+  margin-bottom: 2rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.coming-soon {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #81c784;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 1rem;
+}
+
+.home-page h1 {
+  font-size: 2.5rem;
+  color: #2e7d32;
+  margin-bottom: 1.5rem;
+  line-height: 1.2;
+}
+
+.tagline {
+  font-size: 1.1rem;
+  color: #558b2f;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.description {
+  font-size: 1.1rem;
+  color: #555;
+  line-height: 1.8;
+  max-width: 600px;
+}
+
+/* Users page */
+.users-page h1 {
+  color: #2e7d32;
+  margin-bottom: 1.5rem;
+}
+
+.users-list {
+  list-style: none;
+}
+
+.users-list li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.users-list a {
+  color: #558b2f;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.users-list a:hover {
+  color: #2e7d32;
+  text-decoration: underline;
+}
+
+/* User detail page */
+.user-detail h1 {
+  color: #2e7d32;
+  margin-bottom: 1.5rem;
+}
+
+.user-detail p {
+  margin-bottom: 0.5rem;
+}
+
+.user-detail a {
+  color: #558b2f;
+  text-decoration: none;
+}
+
+.user-detail a:hover {
+  text-decoration: underline;
+}
+
+/* API test page */
+.api-test h1 {
+  color: #2e7d32;
+  margin-bottom: 1rem;
+}
+
+.api-test p {
+  margin-bottom: 1.5rem;
+  color: #666;
+}
+
+.api-test textarea {
+  width: 100%;
+  max-width: 600px;
+  height: 200px;
+  padding: 1rem;
+  font-family: monospace;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.api-test button {
+  background: #2e7d32;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.api-test button:hover {
+  background: #1b5e20;
+}
+
+.api-test pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-top: 1.5rem;
+}
+
+/* Not found page */
+.not-found {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.not-found h1 {
+  font-size: 4rem;
+  color: #2e7d32;
+  margin-bottom: 1rem;
+}
+
+.not-found p {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.not-found a {
+  color: #558b2f;
+  font-weight: 600;
+}

@@ -12,7 +12,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "local": "tsx watch scripts/dev-server/main.ts",
+    "dev": "concurrently -n ssr,vite -c blue,magenta \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "NODE_ENV=development tsx watch scripts/dev-server/main.ts",
+    "dev:client": "vite",
     "build:lambda": "rm -rf dist cdk.out && tsx scripts/build/main.ts",
     "invalidate": "aws cloudfront create-invalidation --distribution-id E37HWDLRRXVPYN --paths \"/*\" --profile appi --no-cli-pager",
     "deploy": "npm run build:lambda && npx cdk deploy --profile appi --require-approval never && npm run invalidate"
@@ -20,13 +22,16 @@
   "devDependencies": {
     "@broccoliapps/framework-dev-tools": "*",
     "@broccoliapps/infra": "*",
+    "@preact/preset-vite": "^2.10.2",
     "@types/aws-lambda": "^8.10.159",
     "@types/node": "^25.0.3",
     "aws-cdk-lib": "^2.234.0",
+    "concurrently": "^9.2.1",
     "constructs": "^10.4.4",
     "esbuild": "^0.27.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "dependencies": {
     "@broccoliapps/framework-backend": "*",
@@ -36,6 +41,7 @@
     "hono": "^4.11.3",
     "preact": "^10.28.2",
     "preact-render-to-string": "^6.6.5",
+    "preact-router": "^4.1.2",
     "valibot": "^1.2.0"
   }
 }

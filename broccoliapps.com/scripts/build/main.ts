@@ -7,6 +7,10 @@ import { findForbiddenDeps, formatForbiddenDepsError } from "./dependency-verifi
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "../..");
 
+// Build ID for cache busting (timestamp format: yyyyMMddHHmmss)
+const isDevBuild = process.env.NODE_ENV === "development";
+const buildId = isDevBuild ? "" : new Date().toISOString().replace(/[-T:.Z]/g, "").slice(0, 14);
+
 interface LambdaConfig {
   entry: string;
   outdir: string;
@@ -32,16 +36,25 @@ const sharedConfig: esbuild.BuildOptions = {
   metafile: true,
 };
 
+// Define globals for SSR builds
+const ssrDefines = {
+  __BUILD_ID__: JSON.stringify(buildId),
+};
+
 const buildLambda = async ({ entry, outdir, forbiddenDeps }: LambdaConfig) => {
   const entryFile = path.join(entry, "lambda.ts");
   const outFile = path.join(outdir, "index.js");
 
   console.log(`  ${entryFile} → ${outFile}`);
 
+  // Add defines for SSR build
+  const isSSR = entry === "src/ui/server";
+
   const result = await esbuild.build({
     ...sharedConfig,
     entryPoints: [path.join(rootDir, entryFile)],
     outfile: path.join(rootDir, outFile),
+    define: isSSR ? ssrDefines : undefined,
   });
 
   // Check for forbidden dependencies
@@ -56,12 +69,56 @@ const buildLambda = async ({ entry, outdir, forbiddenDeps }: LambdaConfig) => {
   fs.writeFileSync(path.join(outdir, "package.json"), JSON.stringify({ type: "module" }, null, 2));
 };
 
+const buildClient = async () => {
+  const jsFileName = buildId ? `app.${buildId}.js` : "app.js";
+  const cssFileName = buildId ? `app.${buildId}.css` : "app.css";
+  const outDir = path.join(rootDir, "dist/static");
+
+  // Ensure output directory exists
+  fs.mkdirSync(outDir, { recursive: true });
+
+  console.log(`  src/ui/client/index.tsx → dist/static/${jsFileName}`);
+
+  // Build client JS bundle
+  await esbuild.build({
+    entryPoints: [path.join(rootDir, "src/ui/client/index.tsx")],
+    bundle: true,
+    minify: !isDevBuild,
+    platform: "browser",
+    target: ["es2020", "chrome89", "firefox108", "safari16.4"],
+    outfile: path.join(outDir, jsFileName),
+    sourcemap: true,
+    format: "esm",
+    jsx: "automatic",
+    jsxImportSource: "preact",
+    // Bundle everything including Preact
+    define: {
+      "process.env.NODE_ENV": JSON.stringify(isDevBuild ? "development" : "production"),
+    },
+  });
+
+  // Build CSS (using esbuild to process CSS imports)
+  console.log(`  src/ui/client/app.css → dist/static/${cssFileName}`);
+
+  await esbuild.build({
+    entryPoints: [path.join(rootDir, "src/ui/client/app.css")],
+    bundle: true,
+    minify: !isDevBuild,
+    outfile: path.join(outDir, cssFileName),
+  });
+
+  console.log(`\n  Build ID: ${buildId || "(dev)"}`);
+};
+
 const build = async () => {
   console.log("Building Lambda functions...\n");
 
   for (const lambda of lambdas) {
     await buildLambda(lambda);
   }
+
+  console.log("\nBuilding client bundle...\n");
+  await buildClient();
 
   console.log("\nDone!");
 };

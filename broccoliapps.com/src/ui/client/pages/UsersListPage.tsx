@@ -1,28 +1,56 @@
+import { route } from "preact-router";
+import { useEffect, useState } from "preact/hooks";
+
 type User = {
   id: number;
   name: string;
 };
 
-export type ListUsersProps = {
-  users: User[];
+export type UsersListProps = {
+  users?: User[];
 };
 
-export const ListUsersPage = ({ users }: ListUsersProps) => {
-  return (
-    <html>
-      <head>
-        <title>Users</title>
-      </head>
-      <body>
+export const UsersListPage = ({ users: initialUsers }: UsersListProps) => {
+  const [users, setUsers] = useState<User[] | undefined>(initialUsers);
+  const [loading, setLoading] = useState(!initialUsers);
+
+  useEffect(() => {
+    if (!initialUsers) {
+      fetch("/api/users")
+        .then((res) => res.json())
+        .then((data) => {
+          setUsers(data.users);
+          setLoading(false);
+        });
+    }
+  }, [initialUsers]);
+
+  const handleUserClick = (e: Event, userId: number) => {
+    e.preventDefault();
+    route(`/users/${userId}`);
+  };
+
+  if (loading) {
+    return (
+      <div class="users-page">
         <h1>Users</h1>
-        <ul>
-          {users.map((user) => (
-            <li key={user.id}>
-              <a href={`/users/${user.id}`}>{user.name}</a>
-            </li>
-          ))}
-        </ul>
-      </body>
-    </html>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div class="users-page">
+      <h1>Users</h1>
+      <ul class="users-list">
+        {users?.map((user) => (
+          <li key={user.id}>
+            <a href={`/users/${user.id}`} onClick={(e) => handleUserClick(e, user.id)}>
+              {user.name}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 };
