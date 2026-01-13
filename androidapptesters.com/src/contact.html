@@ -70,7 +70,21 @@
           </div>
 
           <div id="success-message" class="hidden success-message-alt">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
             <h3>Message Sent!</h3>
             <p>Thank you for reaching out. We'll get back to you soon.</p>
           </div>
@@ -91,7 +105,31 @@
     <script>
       // === CONFIGURATION ===
       const GOOGLE_SCRIPT_URL =
-        "https://script.google.com/macros/s/AKfycbz1-2nIF_RykIhsxPNBRnBfs_DqC_kxbgwb09bBwnpqzCjMhVK_l3JzZoLPz5GmbcuD/exec";
+        "https://script.google.com/macros/s/AKfycbx8IHVQXB5THjLIZR0AHlLv6aA8JDs4HmpspDZ85yr2UibaB5DFBJsqoGtha6o1-lA3/exec";
+
+      async function sendEvent(event, data) {
+        // Fetch country from IP
+        let country = "Unknown";
+        try {
+          const res = await fetch("https://ipapi.co/json/");
+          const data = await res.json();
+          country = data.country_name || "Unknown";
+        } catch (err) {
+          // Continue with Unknown if API fails
+        }
+
+        return fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event,
+            data,
+            country: country,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
 
       async function handleContactSubmit(e) {
         e.preventDefault();
@@ -104,28 +142,8 @@
         btn.disabled = true;
         btn.innerText = "Sending...";
 
-        // Fetch country from IP
-        let country = "Unknown";
         try {
-          const res = await fetch("https://ipapi.co/json/");
-          const data = await res.json();
-          country = data.country_name || "Unknown";
-        } catch (err) {
-          // Continue with Unknown if API fails
-        }
-
-        try {
-          await fetch(GOOGLE_SCRIPT_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: email,
-              role: message,
-              country: country,
-              timestamp: new Date().toISOString(),
-            }),
-          });
+          await sendEvent("contact", `${email}: ${message}`);
 
           document.getElementById("contact-form-container").classList.add("hidden");
           document.getElementById("success-message").classList.remove("hidden");
@@ -135,6 +153,8 @@
           btn.innerText = "Send Message";
         }
       }
+
+      sendEvent("visit", "contact");
     </script>
   </body>
 </html>
