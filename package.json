@@ -6,6 +6,7 @@
   "workspaces": [
     "framework/*",
     "broccoliapps.com",
+    "androidapptesters.com",
     "expense-tracker/*"
   ],
   "engines": {

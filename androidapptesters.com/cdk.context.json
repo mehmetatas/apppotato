@@ -1,0 +1,10 @@
+{
+  "hosted-zone:account=155305329201:domainName=androidapptesters.com:region=us-east-1": {
+    "Id": "/hostedzone/Z0677811Y5TZ43KE4G1A",
+    "Name": "androidapptesters.com."
+  },
+  "hosted-zone:account=155305329201:domainName=androidapptesters.com:region=us-west-2": {
+    "Id": "/hostedzone/Z0677811Y5TZ43KE4G1A",
+    "Name": "androidapptesters.com."
+  }
+}

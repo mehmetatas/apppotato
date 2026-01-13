@@ -44,20 +44,13 @@ type LambdaDef = {
 export class AppBuilder {
   private stack!: cdk.Stack;
 
-  private ssrLambdaDef!: LambdaDef;
-  private table!: dynamodb.Table;
-  private ssrLambda!: lambda.Function;
-
-  private domain!: string;
-  private subdomains!: string[];
-  private sslCertArn!: string;
-
+  private domain?: string;
+  private subdomains?: string[];
+  private sslCertArn?: string;
+  private ssrLambdaDef?: LambdaDef;
   private apiLambdaDef?: LambdaDef;
   private cloudfrontFnPath?: string;
   private staticPath?: string;
-
-  private apiLambda?: lambda.Function;
-  private staticBucket?: s3.Bucket;
 
   constructor(
     private readonly account: string,
@@ -135,7 +128,7 @@ export class AppBuilder {
     return this;
   }
 
-  private configureStaticBucket(): s3.Bucket {
+  private configureStaticBucket(isDefaultOrigin = false): s3.Bucket {
     const bucket = new s3.Bucket(this.stack, this.resourceName("static-bucket"), {
       bucketName: this.resourceName("static"),
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -143,18 +136,24 @@ export class AppBuilder {
       autoDeleteObjects: !this.isProd(),
     });
 
-    // Deploy static files to S3 under /static/ prefix
+    // Deploy static files to S3
+    // If this is the default origin (static-only site), deploy to root
+    // Otherwise, deploy under /static/ prefix
     new s3deploy.BucketDeployment(this.stack, this.resourceName("static-deploy"), {
       sources: [s3deploy.Source.asset(this.staticPath!)],
       destinationBucket: bucket,
-      destinationKeyPrefix: "static",
+      destinationKeyPrefix: isDefaultOrigin ? undefined : "static",
       cacheControl: [s3deploy.CacheControl.maxAge(cdk.Duration.days(365))],
     });
 
     return bucket;
   }
 
-  private configureLambda(name: string, { path, config }: LambdaDef): lambda.Function {
+  private configureLambda(
+    name: string,
+    { path, config }: LambdaDef,
+    { table }: { table?: dynamodb.Table }
+  ): lambda.Function {
     const lambdaFn = new lambda.Function(this.stack, this.resourceName(name), {
       functionName: this.resourceName(name),
       code: lambda.Code.fromAsset(path),
@@ -178,8 +177,10 @@ export class AppBuilder {
         config?.reservedConcurrentExecutions ?? defaultConfig.lambda.reservedConcurrentExecutions,
     });
 
-    // All lambdas can read/write table
-    this.table.grantReadWriteData(lambdaFn);
+    // All lambdas can read/write table (if table exists)
+    if (table) {
+      table.grantReadWriteData(lambdaFn);
+    }
 
     // All lambdas can read ssm params
     lambdaFn.addToRolePolicy(
@@ -192,37 +193,33 @@ export class AppBuilder {
     return lambdaFn;
   }
 
-  private configureCloudFront() {
-    const ssrFunctionUrl = this.ssrLambda!.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
-    const apiFunctionUrl = this.apiLambda?.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
+  private configureCloudFront({
+    ssrLambda,
+    apiLambda,
+    staticBucket,
+  }: {
+    ssrLambda?: lambda.Function;
+    apiLambda?: lambda.Function;
+    staticBucket?: s3.Bucket;
+  }) {
+    if (!ssrLambda && !staticBucket && !apiLambda) {
+      // no need to create cloudfront
+      return;
+    }
 
-    // OAC for CloudFront to access Lambda. To invoke LambdaURL with IAM auth, CloudFront needs to sign the POST and PUT requests.
-    const cfnOacLambda = new cloudfront.FunctionUrlOriginAccessControl(this.stack, this.resourceName("oac"), {
-      originAccessControlName: this.resourceName("oac"),
-      description: "OAC for CloudFront to access Lambda",
-      signing: new cloudfront.Signing(cloudfront.SigningProtocol.SIGV4, cloudfront.SigningBehavior.ALWAYS),
-    });
+    const { domain, subdomains } = this;
+    if (!domain || !subdomains) {
+      throw new Error("domain and subdomains must be specified for creating cloudfront distribution");
+    }
 
-    // SSR pages can be cached
-    const ssrCachePolicy = new cloudfront.CachePolicy(this.stack, this.resourceName("www-cache-policy"), {
-      cachePolicyName: this.resourceName("www-cache-policy"),
-      comment: "Cache policy for SSR endpoints",
-      defaultTtl: cdk.Duration.seconds(0),
-      minTtl: cdk.Duration.seconds(0),
-      maxTtl: cdk.Duration.days(365),
-      enableAcceptEncodingGzip: true,
-      enableAcceptEncodingBrotli: true,
-    });
-
-    // Create cloudfront function
-    let functionAssociations: cloudfront.FunctionAssociation[] | undefined = undefined;
+    // Viewer request function
+    let functionAssociations: cloudfront.FunctionAssociation[] | undefined;
     if (this.cloudfrontFnPath) {
       functionAssociations = [
         {
           function: new cloudfront.Function(this.stack, this.resourceName("cf-function"), {
             functionName: this.resourceName("cf-function"),
             runtime: cloudfront.FunctionRuntime.JS_2_0,
-            // https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html#functions-event-structure-example
             code: cloudfront.FunctionCode.fromInline(fs.readFileSync(this.cloudfrontFnPath!, "utf8")),
           }),
           eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
@@ -230,72 +227,119 @@ export class AppBuilder {
       ];
     }
 
-    // Create CloudFront distribution with SSR Lambda as default origin
-    const distribution = new cloudfront.Distribution(this.stack, this.resourceName("distribution"), {
-      defaultBehavior: {
+    // OAC for Lambda origins
+    let cfnOacLambda: cloudfront.FunctionUrlOriginAccessControl | undefined;
+    if (ssrLambda || apiLambda) {
+      cfnOacLambda = new cloudfront.FunctionUrlOriginAccessControl(this.stack, this.resourceName("oac"), {
+        originAccessControlName: this.resourceName("oac"),
+        signing: new cloudfront.Signing(cloudfront.SigningProtocol.SIGV4, cloudfront.SigningBehavior.ALWAYS),
+      });
+    }
+
+    // Build behavior configs
+    type BehaviorConfig = { path: string; origin: cloudfront.IOrigin; options: cloudfront.AddBehaviorOptions };
+    const behaviors: BehaviorConfig[] = [];
+
+    if (ssrLambda) {
+      const ssrFunctionUrl = ssrLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
+      // SSR pages can be cached
+      const ssrCachePolicy = new cloudfront.CachePolicy(this.stack, this.resourceName("www-cache-policy"), {
+        cachePolicyName: this.resourceName("www-cache-policy"),
+        comment: "Cache policy for SSR endpoints",
+        defaultTtl: cdk.Duration.seconds(0),
+        minTtl: cdk.Duration.seconds(0),
+        maxTtl: cdk.Duration.days(365),
+        enableAcceptEncodingGzip: true,
+        enableAcceptEncodingBrotli: true,
+      });
+      behaviors.push({
+        path: "/*",
         origin: new origins.FunctionUrlOrigin(ssrFunctionUrl, {
-          originAccessControlId: cfnOacLambda.originAccessControlId,
+          originAccessControlId: cfnOacLambda!.originAccessControlId,
           originId: this.resourceName("ssr-origin"),
         }),
-        compress: true,
-        cachePolicy: ssrCachePolicy,
-        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        functionAssociations,
+        options: {
+          compress: true,
+          cachePolicy: ssrCachePolicy,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          functionAssociations,
+        },
+      });
+    }
+
+    if (apiLambda) {
+      const apiFunctionUrl = apiLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
+      behaviors.push({
+        path: "/api/*",
+        origin: new origins.FunctionUrlOrigin(apiFunctionUrl, {
+          originAccessControlId: cfnOacLambda!.originAccessControlId,
+          originId: this.resourceName("api-origin"),
+        }),
+        options: {
+          compress: true,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          functionAssociations,
+        },
+      });
+    }
+
+    if (staticBucket) {
+      behaviors.push({
+        path: "/static/*",
+        origin: origins.S3BucketOrigin.withOriginAccessControl(staticBucket, {
+          originId: this.resourceName("static-origin"),
+        }),
+        options: {
+          compress: true,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          functionAssociations,
+        },
+      });
+    }
+
+    // Pop first as default, rest as additional
+    const [defaultBehavior, ...additionalBehaviors] = behaviors;
+
+    if (!defaultBehavior) {
+      throw new Error("No behaviour found!"); // this should never happen, just added to make compiler happy
+    }
+
+    const distribution = new cloudfront.Distribution(this.stack, this.resourceName("distribution"), {
+      defaultBehavior: {
+        origin: defaultBehavior.origin,
+        ...defaultBehavior.options,
       },
+      additionalBehaviors: Object.fromEntries(
+        additionalBehaviors.map((b) => [b.path, { origin: b.origin, ...b.options }])
+      ),
       comment: this.resourceName("distribution"),
       enabled: true,
       httpVersion: cloudfront.HttpVersion.HTTP2,
       certificate: this.getSslCert(),
-      domainNames: this.subdomains.map((sd) => (sd === "" ? this.domain : `${sd}.${this.domain}`)),
+      domainNames: subdomains.map((sd) => (sd === "" ? domain : `${sd}.${domain}`)),
       defaultRootObject: "",
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
     });
 
-    // Add API Lambda as /api/* origin
-    if (apiFunctionUrl) {
-      const apiUrlOrigin = new origins.FunctionUrlOrigin(apiFunctionUrl, {
-        originAccessControlId: cfnOacLambda.originAccessControlId,
-        originId: this.resourceName("api-origin"),
-      });
-      distribution.addBehavior("/api/*", apiUrlOrigin, {
-        compress: true,
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        functionAssociations,
-      });
+    // Grant Lambda invokes
+    if (ssrLambda) {
+      this.grantLambdaInvoke(distribution, "ssr", ssrLambda);
     }
-
-    // Add S3 as /static/* origin
-    if (this.staticBucket) {
-      const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(this.staticBucket, {
-        originId: this.resourceName("static-origin"),
-      });
-      distribution.addBehavior("/static/*", s3Origin, {
-        compress: true,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      });
+    if (apiLambda) {
+      this.grantLambdaInvoke(distribution, "api", apiLambda);
     }
-
-    // Allow CloudFront distribution to invoke SSR and API lambdas
-    this.grantLambdaInvoke(distribution, "ssr");
-    this.grantLambdaInvoke(distribution, "api");
 
     return distribution;
   }
 
-  private grantLambdaInvoke(distribution: cloudfront.Distribution, name: "api" | "ssr") {
-    const lambdaFn = name === "api" ? this.apiLambda : this.ssrLambda;
-
-    if (!lambdaFn) {
-      return;
-    }
-
+  private grantLambdaInvoke(distribution: cloudfront.Distribution, name: "api" | "ssr", lambdaFn: lambda.Function) {
     new lambda.CfnPermission(this.stack, this.resourceName(`cf-${name}-invoke-url-perm`), {
       action: "lambda:InvokeFunctionUrl",
       functionName: lambdaFn.functionName,
@@ -312,6 +356,9 @@ export class AppBuilder {
 
   private hostedZone!: route53.IHostedZone;
   private getHostedZone(): route53.IHostedZone {
+    if (!this.domain) {
+      throw new Error("Cannot create hosted without a domain");
+    }
     if (!this.hostedZone) {
       this.hostedZone = route53.HostedZone.fromLookup(this.stack, this.resourceName("hosted-zone"), {
         domainName: this.domain,
@@ -322,6 +369,9 @@ export class AppBuilder {
 
   private sslCert!: acm.ICertificate;
   private getSslCert(): acm.ICertificate {
+    if (!this.sslCertArn) {
+      throw new Error("SSL certificate ARN is not set!");
+    }
     if (!this.sslCert) {
       this.sslCert = acm.Certificate.fromCertificateArn(this.stack, this.resourceName("ssl-cert"), this.sslCertArn);
     }
@@ -329,6 +379,9 @@ export class AppBuilder {
   }
 
   private configureRoute53(distribution: cloudfront.IDistribution) {
+    if (!this.domain || !this.subdomains) {
+      throw new Error("Cannot configure route53 without domain and subdomains");
+    }
     for (const subdomain of this.subdomains) {
       new route53.ARecord(this.stack, this.resourceName(`alias-record-${subdomain || "-root"}`), {
         zone: this.getHostedZone(),
@@ -342,8 +395,8 @@ export class AppBuilder {
     if (!this.domain) {
       throw new Error("domain not set");
     }
-    if (!this.ssrLambdaDef) {
-      throw new Error("SSR Lambda not set");
+    if (!this.ssrLambdaDef && !this.staticPath) {
+      throw new Error("At least one of SSR Lambda or static path must be set");
     }
 
     const app = new cdk.App();
@@ -354,26 +407,37 @@ export class AppBuilder {
       },
     });
 
-    this.table = this.configureDdb();
+    // Only create table if we have lambdas that need it
+    let table: dynamodb.Table | undefined;
+    if (this.ssrLambdaDef || this.apiLambdaDef) {
+      table = this.configureDdb();
+    }
 
-    this.ssrLambda = this.configureLambda("ssr", this.ssrLambdaDef);
+    // Configure SSR lambda if provided
+    let ssrLambda: lambda.Function | undefined;
+    if (this.ssrLambdaDef) {
+      ssrLambda = this.configureLambda("ssr", this.ssrLambdaDef, { table });
+    }
 
+    // Configure API lambda if provided
+    let apiLambda: lambda.Function | undefined;
     if (this.apiLambdaDef) {
-      this.apiLambda = this.configureLambda("api", this.apiLambdaDef);
+      apiLambda = this.configureLambda("api", this.apiLambdaDef, { table });
     }
 
+    // Configure static bucket
+    // isDefaultOrigin=true when no SSR lambda (static-only site)
+    let staticBucket: s3.Bucket | undefined;
     if (this.staticPath) {
-      this.staticBucket = this.configureStaticBucket();
+      const isDefaultOrigin = !this.ssrLambdaDef;
+      staticBucket = this.configureStaticBucket(isDefaultOrigin);
     }
 
-    const distribution = this.configureCloudFront();
+    const distribution = this.configureCloudFront({ ssrLambda, apiLambda, staticBucket });
 
-    this.configureRoute53(distribution);
-
-    new cdk.CfnOutput(this.stack, this.resourceName("out-cf-url"), {
-      value: `https://${distribution.distributionDomainName}`,
-      description: "CloudFront Distribution URL",
-    });
+    if (distribution) {
+      this.configureRoute53(distribution);
+    }
 
     app.synth();
   }

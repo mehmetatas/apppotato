@@ -18,7 +18,8 @@
   },
   "scripts": {
     "build": "npm run clean && tsc",
-    "clean": "rm -rf dist/"
+    "clean": "rm -rf dist/",
+    "ssl": "tsx src/ssl.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.233.0",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
 }

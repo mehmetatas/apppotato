@@ -18,7 +18,7 @@
     "clean": "rm -rf dist/"
   },
   "dependencies": {
-    "@broccoliapps/framework-shared": "file:../shared"
+    "@broccoliapps/framework-shared": "*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

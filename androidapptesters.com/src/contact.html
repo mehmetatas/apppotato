@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary Meta Tags -->
+    <title>Contact | AndroidAppTesters</title>
+    <meta name="title" content="Contact | AndroidAppTesters" />
+    <meta name="description" content="Get in touch with AndroidAppTesters. We'd love to hear from you." />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+    <meta name="author" content="AndroidAppTesters" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://androidapptesters.com/contact" />
+    <meta property="og:title" content="Contact | AndroidAppTesters" />
+    <meta property="og:description" content="Get in touch with AndroidAppTesters." />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://androidapptesters.com/contact" />
+    <meta property="twitter:title" content="Contact | AndroidAppTesters" />
+    <meta property="twitter:description" content="Get in touch with AndroidAppTesters." />
+
+    <link rel="icon" type="image/png" href="logo.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="selection-indigo">
+    <!-- Navigation -->
+    <nav class="nav" role="navigation" aria-label="Main Navigation">
+      <a href="/" class="nav-logo">
+        <img src="logo.png" alt="AndroidAppTesters Logo" class="nav-logo-img" />
+        <span>AndroidAppTesters</span>
+      </a>
+      <div class="nav-links">
+        <a href="/" title="For developers">For Developers</a>
+        <a href="testers" title="Become a tester">For Testers</a>
+      </div>
+    </nav>
+
+    <main>
+      <!-- Contact Form Section -->
+      <section class="content-section">
+        <div class="container container-sm">
+          <div class="content-header">
+            <h1 class="content-title">Contact Us</h1>
+            <p class="content-subtitle">Have a question or feedback? We'd love to hear from you.</p>
+          </div>
+
+          <div id="contact-form-container" class="card">
+            <form onsubmit="handleContactSubmit(event)">
+              <div class="form-group">
+                <label for="user-email" class="form-label">Email</label>
+                <input type="email" id="user-email" required placeholder="your@email.com" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label for="user-message" class="form-label">Message</label>
+                <textarea
+                  id="user-message"
+                  required
+                  rows="5"
+                  placeholder="Your message..."
+                  class="form-input form-textarea"
+                ></textarea>
+              </div>
+              <button type="submit" id="submit-button" class="form-submit">Send Message</button>
+            </form>
+          </div>
+
+          <div id="success-message" class="hidden success-message-alt">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <h3>Message Sent!</h3>
+            <p>Thank you for reaching out. We'll get back to you soon.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>&copy; 2026 AndroidAppTesters Testing Services. Connecting Android Developers and Quality Testers.</p>
+      <div class="footer-links">
+        <a href="privacy" title="Privacy Policy">Privacy</a>
+        <a href="terms" title="Terms of Service">Terms</a>
+        <a href="contact" title="Contact Us">Contact</a>
+      </div>
+    </footer>
+
+    <script>
+      // === CONFIGURATION ===
+      const GOOGLE_SCRIPT_URL =
+        "https://script.google.com/macros/s/AKfycbz1-2nIF_RykIhsxPNBRnBfs_DqC_kxbgwb09bBwnpqzCjMhVK_l3JzZoLPz5GmbcuD/exec";
+
+      async function handleContactSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById("user-email").value;
+        const message = document.getElementById("user-message").value;
+        const btn = document.getElementById("submit-button");
+
+        if (!email || !message) return;
+
+        btn.disabled = true;
+        btn.innerText = "Sending...";
+
+        // Fetch country from IP
+        let country = "Unknown";
+        try {
+          const res = await fetch("https://ipapi.co/json/");
+          const data = await res.json();
+          country = data.country_name || "Unknown";
+        } catch (err) {
+          // Continue with Unknown if API fails
+        }
+
+        try {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: email,
+              role: message,
+              country: country,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+
+          document.getElementById("contact-form-container").classList.add("hidden");
+          document.getElementById("success-message").classList.remove("hidden");
+        } catch (err) {
+          alert("Something went wrong. Please try again.");
+          btn.disabled = false;
+          btn.innerText = "Send Message";
+        }
+      }
+    </script>
+  </body>
+</html>

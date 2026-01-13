@@ -1,0 +1,25 @@
+{
+  "name": "androidapptesters-com",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "http-server src",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "invalidate": "aws cloudfront create-invalidation --distribution-id EB3SJ18EGEXE5 --paths \"/*\" --profile appi --no-cli-pager",
+    "deploy": "cdk deploy --profile appi --require-approval never && npm run invalidate",
+    "build": "rm -rf dist && cp -r src dist && cleancss -o dist/style.css src/style.css && html-minifier-terser --input-dir dist --output-dir dist --file-ext html --collapse-whitespace --remove-comments --minify-js --minify-css",
+    "update": "npm run build && aws s3 sync dist s3://androidapptesters-com-static --delete --profile appi && npm run invalidate"
+  },
+  "devDependencies": {
+    "@broccoliapps/infra": "*",
+    "aws-cdk": "^2.170.0",
+    "aws-cdk-lib": "^2.170.0",
+    "clean-css-cli": "^5.6.3",
+    "html-minifier-terser": "^7.2.0",
+    "constructs": "^10.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
