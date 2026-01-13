@@ -34,6 +34,9 @@ const sharedConfig: esbuild.BuildOptions = {
   sourcemap: true,
   minify: false,
   metafile: true,
+  banner: {
+    js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`,
+  },
 };
 
 // Define globals for SSR builds

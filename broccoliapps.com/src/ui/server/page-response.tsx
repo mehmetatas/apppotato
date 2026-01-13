@@ -1,4 +1,4 @@
-import type { Cookie } from "@broccoliapps/framework-shared";
+import type { Cookie } from "@broccoliapps/shared";
 import type { VNode } from "preact";
 import { render as renderToString } from "preact-render-to-string";
 import { Html } from "../client/layout/Html";

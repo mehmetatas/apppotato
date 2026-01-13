@@ -1,5 +1,5 @@
 {
-  "name": "@broccoliapps/framework-shared",
+  "name": "@broccoliapps/shared",
   "version": "0.0.1",
   "type": "module",
   "main": "dist/index.js",

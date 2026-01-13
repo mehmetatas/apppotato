@@ -1,4 +1,4 @@
-import { PageRouter } from "@broccoliapps/framework-backend/http/page";
+import { PageRouter } from "@broccoliapps/backend/http/page";
 
 export const page = new PageRouter();
 

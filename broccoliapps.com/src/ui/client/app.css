@@ -56,6 +56,22 @@ body {
   color: #2e7d32;
 }
 
+.sign-in-btn {
+  background: #4285f4;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.sign-in-btn:hover {
+  background: #3367d6;
+}
+
 /* Main content */
 .main-content {
   flex: 1;

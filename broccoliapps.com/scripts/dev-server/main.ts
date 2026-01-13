@@ -1,9 +1,9 @@
-import { serve } from "@broccoliapps/framework-dev-tools";
+import { serve } from "@broccoliapps/dev-tools";
 import { api } from "../../src/api/lambda";
 import { page } from "../../src/ui/server/lambda";
 
 serve({
-  port: 3000,
+  port: 8080,
   routes: {
     "/api/*": api,
     "/health/*": api,

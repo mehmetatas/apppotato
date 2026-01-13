@@ -1,5 +1,5 @@
+import { ApiError } from "@broccoliapps/shared/contract";
 import { useState } from "preact/hooks";
-import { ApiError } from "@broccoliapps/framework-shared/contract";
 import { createValidationTest } from "../../../shared/api-contracts";
 
 const defaultPayload = `{

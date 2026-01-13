@@ -13,7 +13,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build:framework": "npm run build -w @broccoliapps/framework-shared && npm run build -w @broccoliapps/framework-backend -w @broccoliapps/framework-frontend -w @broccoliapps/infra -w @broccoliapps/framework-dev-tools",
+    "build:framework": "npm run build -w @broccoliapps/shared && npm run build -w @broccoliapps/backend -w @broccoliapps/frontend -w @broccoliapps/infra -w @broccoliapps/dev-tools -w @broccoliapps/browser",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

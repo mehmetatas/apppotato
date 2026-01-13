@@ -1,5 +1,5 @@
-import { coerceNumber } from "@broccoliapps/framework-shared/coerce";
-import { api } from "@broccoliapps/framework-shared/contract";
+import { coerceNumber } from "@broccoliapps/shared/coerce";
+import { api } from "@broccoliapps/shared/contract";
 import * as v from "valibot";
 
 export const createUser = api("POST", "/users")

@@ -1,4 +1,4 @@
-import { ApiRouter } from "@broccoliapps/framework-backend/http/api";
+import { ApiRouter } from "@broccoliapps/backend/http/api";
 
 export const api = new ApiRouter();
 

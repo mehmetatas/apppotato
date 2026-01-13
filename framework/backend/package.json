@@ -1,5 +1,5 @@
 {
-  "name": "@broccoliapps/framework-backend",
+  "name": "@broccoliapps/backend",
   "version": "0.0.1",
   "type": "module",
   "main": "dist/http/index.js",
@@ -16,6 +16,10 @@
     "./http/page": {
       "types": "./dist/http/page/index.d.ts",
       "import": "./dist/http/page/index.js"
+    },
+    "./secrets": {
+      "types": "./dist/secrets.d.ts",
+      "import": "./dist/secrets.js"
     }
   },
   "files": [
@@ -26,7 +30,8 @@
     "clean": "rm -rf dist/"
   },
   "dependencies": {
-    "@broccoliapps/framework-shared": "*"
+    "@aws-sdk/client-ssm": "^3.758.0",
+    "@broccoliapps/shared": "*"
   },
   "peerDependencies": {
     "hono": "^4.11.3",

@@ -1,9 +1,19 @@
+import { cognitoClient } from "@broccoliapps/browser";
 import { route } from "preact-router";
+import { config } from "../../../shared/config";
 
 export const Header = () => {
   const handleNavClick = (e: Event, href: string) => {
     e.preventDefault();
     route(href);
+  };
+
+  const handleSignIn = () => {
+    cognitoClient.signInWith("google", {
+      domain: config.cognito.domain,
+      userPoolClientId: config.cognito.userPoolClientId,
+      baseUrl: config.baseUrl,
+    });
   };
 
   return (
@@ -22,6 +32,9 @@ export const Header = () => {
           API Test
         </a>
       </nav>
+      <button class="sign-in-btn" onClick={handleSignIn}>
+        Sign in with Google
+      </button>
     </header>
   );
 };

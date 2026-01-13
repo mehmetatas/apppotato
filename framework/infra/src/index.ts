@@ -1,10 +1,13 @@
 // @broccoliapps/infra
 // Reusable CDK constructs for deploying backend/SaaS infrastructure on AWS
 
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { fromIni } from "@aws-sdk/credential-providers";
 import * as cdk from "aws-cdk-lib";
 import {
   aws_certificatemanager as acm,
   aws_cloudfront as cloudfront,
+  aws_cognito as cognito,
   aws_dynamodb as dynamodb,
   aws_iam as iam,
   aws_lambda as lambda,
@@ -41,7 +44,24 @@ type LambdaDef = {
   config?: LambdaConfig;
 };
 
-export class AppBuilder {
+export type SigninConfig = {
+  google?: {
+    clientId: string;
+    clientSecretSsmParam: string;
+  };
+  apple?: {
+    keyId: string;
+    privateKeySsmParam: string;
+    servicesId: string;
+    teamId: string;
+  };
+  facebook?: {
+    appId: string;
+    appSecretSsmParam: string;
+  };
+};
+
+class AppBuilder {
   private stack!: cdk.Stack;
 
   private domain?: string;
@@ -51,11 +71,12 @@ export class AppBuilder {
   private apiLambdaDef?: LambdaDef;
   private cloudfrontFnPath?: string;
   private staticPath?: string;
+  private signinConfig?: SigninConfig;
 
   constructor(
+    private readonly appName: string,
     private readonly account: string,
     private readonly region: string,
-    private readonly appName: string,
     private readonly env: Env
   ) {}
 
@@ -67,6 +88,38 @@ export class AppBuilder {
     const env = this.isProd() ? "" : `-${this.env}`;
     suffix = suffix ? `-${suffix}` : "";
     return `${this.appName}${env}${suffix}`; // <app> | <app>-<env> | <app>-<env>-<suffix> | <app>-<suffix>
+  }
+
+  private subdomain(subdomain: string) {
+    if (this.isProd()) {
+      return subdomain; // no env suffix appended to prod resources
+    }
+    if (subdomain === "") {
+      return this.env;
+    }
+    return `${subdomain}-${this.env}`;
+  }
+
+  private async getSsmParam(key: string): Promise<string> {
+    const paramPath = `/${this.resourceName()}/${key}`;
+
+    console.log("Fetching SSM Param: " + paramPath);
+
+    const profile = process.env.AWS_PROFILE;
+    const client = new SSMClient({
+      region: this.region,
+      credentials: profile ? fromIni({ profile }) : undefined,
+    });
+    const response = await client.send(
+      new GetParameterCommand({
+        Name: paramPath,
+        WithDecryption: true,
+      })
+    );
+    if (!response.Parameter?.Value) {
+      throw new Error(`SSM parameter not found: ${paramPath}`);
+    }
+    return response.Parameter.Value;
   }
 
   private configureDdb() {
@@ -98,12 +151,174 @@ export class AppBuilder {
     return table;
   }
 
+  private async configureCognito(): Promise<{ userPoolId: string; userPoolClientId: string }> {
+    if (!this.signinConfig) {
+      throw new Error("SigninConfig is required for Cognito");
+    }
+    if (!this.domain) {
+      throw new Error("Domain must be set before configuring Cognito");
+    }
+
+    // Create User Pool (social sign-in only, no email/password)
+    const userPool = new cognito.UserPool(this.stack, this.resourceName("user-pool"), {
+      userPoolName: this.resourceName("user-pool"),
+      selfSignUpEnabled: false, // Only social sign-in
+      signInAliases: { email: true }, // Email from social providers
+      autoVerify: { email: false },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: false,
+      },
+      customAttributes: {
+        name: new cognito.StringAttribute({ mutable: true }),
+      },
+      removalPolicy: this.isProd() ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Create identity providers
+    const identityProviders: cognito.UserPoolClientIdentityProvider[] = [];
+    const idpDependencies: cdk.Resource[] = [];
+
+    // Google IdP
+    if (this.signinConfig.google) {
+      const clientId = this.signinConfig.google.clientId;
+      const clientSecret = await this.getSsmParam(this.signinConfig.google.clientSecretSsmParam);
+      const googleIdp = new cognito.UserPoolIdentityProviderGoogle(this.stack, this.resourceName("google-idp"), {
+        userPool,
+        clientId,
+        clientSecretValue: cdk.SecretValue.unsafePlainText(clientSecret),
+        scopes: ["email", "profile", "openid"],
+        attributeMapping: {
+          email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+          fullname: cognito.ProviderAttribute.GOOGLE_NAME,
+        },
+      });
+      identityProviders.push(cognito.UserPoolClientIdentityProvider.GOOGLE);
+      idpDependencies.push(googleIdp);
+    }
+
+    // Apple IdP
+    if (this.signinConfig.apple) {
+      const servicesId = this.signinConfig.apple.servicesId;
+      const teamId = this.signinConfig.apple.teamId;
+      const keyId = this.signinConfig.apple.keyId;
+      const privateKey = await this.getSsmParam(this.signinConfig.apple.privateKeySsmParam);
+      const appleIdp = new cognito.UserPoolIdentityProviderApple(this.stack, this.resourceName("apple-idp"), {
+        userPool,
+        clientId: servicesId,
+        teamId,
+        keyId,
+        privateKey,
+        scopes: ["email", "name"],
+        attributeMapping: {
+          email: cognito.ProviderAttribute.APPLE_EMAIL,
+          fullname: cognito.ProviderAttribute.APPLE_NAME,
+        },
+      });
+      identityProviders.push(cognito.UserPoolClientIdentityProvider.APPLE);
+      idpDependencies.push(appleIdp);
+    }
+
+    // Facebook IdP
+    if (this.signinConfig.facebook) {
+      const appId = this.signinConfig.facebook.appId;
+      const appSecret = await this.getSsmParam(this.signinConfig.facebook.appSecretSsmParam);
+      const facebookIdp = new cognito.UserPoolIdentityProviderFacebook(this.stack, this.resourceName("facebook-idp"), {
+        userPool,
+        clientId: appId,
+        clientSecret: appSecret,
+        scopes: ["email", "public_profile"],
+        attributeMapping: {
+          email: cognito.ProviderAttribute.FACEBOOK_EMAIL,
+          fullname: cognito.ProviderAttribute.FACEBOOK_NAME,
+        },
+      });
+      identityProviders.push(cognito.UserPoolClientIdentityProvider.FACEBOOK);
+      idpDependencies.push(facebookIdp);
+    }
+
+    if (identityProviders.length === 0) {
+      throw new Error("At least one identity provider must be configured");
+    }
+
+    // Build callback/logout URLs
+    const primarySubdomain = this.subdomains?.[0] ?? "";
+    const appDomain = primarySubdomain === "" ? this.domain : `${primarySubdomain}.${this.domain}`;
+    const callbackUrls = [
+      ...(!this.isProd() ? ["http://localhost:8080/auth/callback"] : []),
+      `https://${appDomain}/auth/callback`,
+    ];
+    const logoutUrls = [
+      ...(!this.isProd() ? ["http://localhost:8080/auth/signout"] : []),
+      `https://${appDomain}/auth/signout`,
+    ];
+
+    // Create User Pool Client
+    const userPoolClient = new cognito.UserPoolClient(this.stack, this.resourceName("user-pool-client"), {
+      userPool,
+      userPoolClientName: this.resourceName("user-pool-client"),
+      generateSecret: true,
+      supportedIdentityProviders: identityProviders,
+      accessTokenValidity: this.isProd() ? cdk.Duration.days(1) : cdk.Duration.minutes(5),
+      idTokenValidity: this.isProd() ? cdk.Duration.days(1) : cdk.Duration.minutes(5),
+      refreshTokenValidity: this.isProd() ? cdk.Duration.days(365) : cdk.Duration.days(7),
+      oAuth: {
+        flows: {
+          authorizationCodeGrant: true,
+        },
+        callbackUrls,
+        logoutUrls,
+        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
+      },
+    });
+
+    // Add dependencies on IdPs
+    for (const idp of idpDependencies) {
+      userPoolClient.node.addDependency(idp);
+    }
+
+    // Create Cognito prefix domain (for testing - switch to custom domain later)
+    const domainPrefix = this.resourceName().replace(/\./g, "-"); // broccoliapps-com
+    new cognito.UserPoolDomain(this.stack, this.resourceName("user-pool-domain"), {
+      userPool,
+      cognitoDomain: {
+        domainPrefix,
+      },
+    });
+
+    // TODO: Switch back to custom domain once prefix domain works
+    // const authDomain = `${this.subdomain("auth")}.${this.domain}`;
+    // const userPoolDomain = new cognito.UserPoolDomain(this.stack, this.resourceName("user-pool-domain"), {
+    //   userPool,
+    //   customDomain: {
+    //     domainName: authDomain,
+    //     certificate: this.getSslCert(),
+    //   },
+    // });
+    // new route53.ARecord(this.stack, this.resourceName("auth-alias-record"), {
+    //   zone: this.getHostedZone(),
+    //   recordName: "auth",
+    //   target: route53.RecordTarget.fromAlias(new route53targets.UserPoolDomainTarget(userPoolDomain)),
+    // });
+
+    return {
+      userPoolId: userPool.userPoolId,
+      userPoolClientId: userPoolClient.userPoolClientId,
+    };
+  }
+
   public withDomain(domain: string, subdomains: string[], sslCertArn: string) {
     if (subdomains.length === 0) {
       throw new Error("At least 1 subdomain must be specified");
     }
+    if (subdomains.includes("auth")) {
+      throw new Error("auth subdomain is reserved for Cognito");
+    }
     this.domain = domain;
-    this.subdomains = subdomains;
+    this.subdomains = subdomains.map((sd) => this.subdomain(sd));
     this.sslCertArn = sslCertArn;
     return this;
   }
@@ -125,6 +340,11 @@ export class AppBuilder {
 
   public withStatic(path: string) {
     this.staticPath = path;
+    return this;
+  }
+
+  public withSignIn(config: SigninConfig) {
+    this.signinConfig = config;
     return this;
   }
 
@@ -152,8 +372,20 @@ export class AppBuilder {
   private configureLambda(
     name: string,
     { path, config }: LambdaDef,
-    { table }: { table?: dynamodb.Table }
+    {
+      table,
+      cognitoConfig,
+    }: { table?: dynamodb.Table; cognitoConfig?: { userPoolId: string; userPoolClientId: string } }
   ): lambda.Function {
+    // Merge Cognito env vars with user-provided config
+    const environment: Record<string, string> = {
+      ...(config?.environment ?? defaultConfig.lambda.environment),
+    };
+    if (cognitoConfig) {
+      environment.COGNITO_USER_POOL_ID = cognitoConfig.userPoolId;
+      environment.COGNITO_CLIENT_ID = cognitoConfig.userPoolClientId;
+    }
+
     const lambdaFn = new lambda.Function(this.stack, this.resourceName(name), {
       functionName: this.resourceName(name),
       code: lambda.Code.fromAsset(path),
@@ -172,7 +404,7 @@ export class AppBuilder {
       // Config with defaults
       memorySize: config?.memorySize ?? defaultConfig.lambda.memorySize,
       timeout: config?.timeout ?? defaultConfig.lambda.timeout,
-      environment: config?.environment ?? defaultConfig.lambda.environment,
+      environment,
       reservedConcurrentExecutions:
         config?.reservedConcurrentExecutions ?? defaultConfig.lambda.reservedConcurrentExecutions,
     });
@@ -391,7 +623,7 @@ export class AppBuilder {
     }
   }
 
-  public build() {
+  public async build() {
     if (!this.domain) {
       throw new Error("domain not set");
     }
@@ -407,6 +639,12 @@ export class AppBuilder {
       },
     });
 
+    // Configure Cognito if signin is enabled
+    let cognitoConfig: { userPoolId: string; userPoolClientId: string } | undefined;
+    if (this.signinConfig) {
+      cognitoConfig = await this.configureCognito();
+    }
+
     // Only create table if we have lambdas that need it
     let table: dynamodb.Table | undefined;
     if (this.ssrLambdaDef || this.apiLambdaDef) {
@@ -416,13 +654,13 @@ export class AppBuilder {
     // Configure SSR lambda if provided
     let ssrLambda: lambda.Function | undefined;
     if (this.ssrLambdaDef) {
-      ssrLambda = this.configureLambda("ssr", this.ssrLambdaDef, { table });
+      ssrLambda = this.configureLambda("ssr", this.ssrLambdaDef, { table, cognitoConfig });
     }
 
     // Configure API lambda if provided
     let apiLambda: lambda.Function | undefined;
     if (this.apiLambdaDef) {
-      apiLambda = this.configureLambda("api", this.apiLambdaDef, { table });
+      apiLambda = this.configureLambda("api", this.apiLambdaDef, { table, cognitoConfig });
     }
 
     // Configure static bucket
@@ -442,3 +680,9 @@ export class AppBuilder {
     app.synth();
   }
 }
+
+export const app = (appName: string) => ({
+  in: (account: string, region: string) => ({
+    env: (env: Env) => new AppBuilder(appName, account, region, env),
+  }),
+});

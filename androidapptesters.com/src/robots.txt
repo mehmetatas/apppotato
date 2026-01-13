@@ -1,0 +1,9 @@
+User-agent: *
+
+Allow: /
+
+Disallow: /privacy
+Disallow: /terms
+Disallow: /contact
+
+Sitemap: https://androidapptesters.com/sitemap.xml

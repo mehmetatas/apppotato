@@ -1,4 +1,4 @@
-import type { HttpResponse, ResponseOptions } from "@broccoliapps/framework-shared";
+import type { HttpResponse, ResponseOptions } from "@broccoliapps/shared";
 
 // API response object passed to handler callback - enforces strict type checking
 export type ApiResponse<TRes> = {

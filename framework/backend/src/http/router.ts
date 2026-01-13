@@ -1,8 +1,8 @@
+import type { Cookie } from "@broccoliapps/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import * as v from "valibot";
-import type { Cookie } from "@broccoliapps/framework-shared";
 
 export const setCookies = (c: Context, cookies?: Cookie[]): void => {
   if (!cookies) {

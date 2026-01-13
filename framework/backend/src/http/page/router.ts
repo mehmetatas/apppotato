@@ -1,5 +1,5 @@
-import type { Cookie, Schema } from "@broccoliapps/framework-shared";
-import { emptySchema, type EmptyRequest } from "@broccoliapps/framework-shared/contract";
+import type { Cookie, Schema } from "@broccoliapps/shared";
+import { emptySchema, type EmptyRequest } from "@broccoliapps/shared/contract";
 import type { Context } from "hono";
 import * as v from "valibot";
 import { RequestContext } from "../context";
@@ -19,10 +19,7 @@ export type PageResponse = {
 /**
  * Handler function type
  */
-export type PageHandlerFn<TRequest> = (
-  request: TRequest,
-  ctx: RequestContext
-) => Promise<PageResponse>;
+export type PageHandlerFn<TRequest> = (request: TRequest, ctx: RequestContext) => Promise<PageResponse>;
 
 /**
  * Builder with request schema - provides typed handle()
@@ -88,11 +85,7 @@ export class PageRouter extends HttpRouter {
     return this;
   }
 
-  private registerRoute<TReq>(
-    path: string,
-    schema: Schema<TReq>,
-    fn: PageHandlerFn<TReq>
-  ): void {
+  private registerRoute<TReq>(path: string, schema: Schema<TReq>, fn: PageHandlerFn<TReq>): void {
     this.hono.get(path, async (c: Context): Promise<Response> => {
       try {
         const request = await deserializeRequest(c, "GET", schema);

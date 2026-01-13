@@ -1,6 +1,6 @@
+import type { HttpMethod } from "@broccoliapps/shared";
 import type { Context } from "hono";
 import * as v from "valibot";
-import type { HttpMethod } from "@broccoliapps/framework-shared";
 
 /**
  * Merge request data from appropriate sources based on HTTP method.
