@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { executeBatchDelete, executeBatchGet, executeBatchPut } from "./client";
+import { buildPK, buildSK, formatValue } from "./item";
 import { table } from "./table";
-import { executeBatchGet, executeBatchPut, executeBatchDelete } from "./client";
-import { formatValue, buildPK, buildSK } from "./item";
 
 // Set AWS environment before any imports that use AWS SDK
 process.env.AWS_PROFILE = "appi";
@@ -141,13 +141,13 @@ describe("DynamoDB Integration Tests", () => {
     it("should query with SK exact match", async () => {
       const result = await testTable.query({ id: queryPrefix }, { status: "active" }).execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].name).toBe("Alice");
+      expect(result.items[0]?.name).toBe("Alice");
     });
 
     it("should query with SK beginsWith", async () => {
       const result = await testTable.query({ id: queryPrefix }, { status: { beginsWith: "a" } }).execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].status).toBe("active");
+      expect(result.items[0]?.status).toBe("active");
     });
 
     it("should query with limit", async () => {
@@ -163,7 +163,7 @@ describe("DynamoDB Integration Tests", () => {
 
       const page2 = await testTable.query({ id: queryPrefix }).limit(1).cursor(page1.cursor!).execute();
       expect(page2.items.length).toBe(1);
-      expect(page2.items[0].status).not.toBe(page1.items[0].status);
+      expect(page2.items[0]!.status).not.toBe(page1.items[0]!.status);
     });
 
     it("should query in reverse order", async () => {
@@ -171,11 +171,14 @@ describe("DynamoDB Integration Tests", () => {
       const reverse = await testTable.query({ id: queryPrefix }).reverse().execute();
 
       expect(reverse.items.length).toBe(forward.items.length);
-      expect(reverse.items[0].status).toBe(forward.items[forward.items.length - 1].status);
+      expect(reverse.items[0]!.status).toBe(forward.items[forward.items.length - 1]!.status);
     });
 
     it("should query with filter", async () => {
-      const result = await testTable.query({ id: queryPrefix }).filter({ score: { gte: 75 } }).execute();
+      const result = await testTable
+        .query({ id: queryPrefix })
+        .filter({ score: { gte: 75 } })
+        .execute();
       expect(result.items.length).toBe(2);
       expect(result.items.every((item) => item.score >= 75)).toBe(true);
     });
@@ -223,8 +226,8 @@ describe("DynamoDB Integration Tests", () => {
         await testTable.batchPut(items);
 
         // Verify first and last items
-        const first = await testTable.get({ id: items[0].id }, { status: items[0].status });
-        const last = await testTable.get({ id: items[29].id }, { status: items[29].status });
+        const first = await testTable.get({ id: items[0]!.id }, { status: items[0]!.status });
+        const last = await testTable.get({ id: items[29]!.id }, { status: items[29]!.status });
 
         expect(first).toEqual(items[0]);
         expect(last).toEqual(items[29]);
@@ -285,9 +288,9 @@ describe("DynamoDB Integration Tests", () => {
         ];
 
         const results = await testTable.batchGet(keys);
-        expect(results[0].id).toBe(`${batchGetPrefix}-2`);
-        expect(results[1].id).toBe(`${batchGetPrefix}-0`);
-        expect(results[2].id).toBe(`${batchGetPrefix}-1`);
+        expect(results[0]?.id).toBe(`${batchGetPrefix}-2`);
+        expect(results[1]?.id).toBe(`${batchGetPrefix}-0`);
+        expect(results[2]?.id).toBe(`${batchGetPrefix}-1`);
       });
 
       it("should skip non-existent items", async () => {
@@ -337,8 +340,8 @@ describe("DynamoDB Integration Tests", () => {
         await testTable.batchDelete(keys);
 
         // Verify first and last items are deleted
-        const first = await testTable.get({ id: items[0].id }, { status: items[0].status });
-        const last = await testTable.get({ id: items[29].id }, { status: items[29].status });
+        const first = await testTable.get({ id: items[0]!.id }, { status: items[0]!.status });
+        const last = await testTable.get({ id: items[29]!.id }, { status: items[29]!.status });
 
         expect(first).toBeUndefined();
         expect(last).toBeUndefined();
@@ -389,9 +392,7 @@ describe("DynamoDB Integration Tests", () => {
     });
 
     it("should query with between operator", async () => {
-      const result = await testTable
-        .query({ id: skPrefix }, { between: [{ status: "b" }, { status: "d" }] })
-        .execute();
+      const result = await testTable.query({ id: skPrefix }, { between: [{ status: "b" }, { status: "d" }] }).execute();
       expect(result.items.length).toBe(3);
       expect(result.items.map((i) => i.status)).toEqual(["b", "c", "d"]);
     });
@@ -421,41 +422,59 @@ describe("DynamoDB Integration Tests", () => {
     it("should filter with exact match", async () => {
       const result = await testTable.query({ id: filterPrefix }).filter({ name: "Bob" }).execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].name).toBe("Bob");
+      expect(result.items[0]?.name).toBe("Bob");
     });
 
     it("should filter with beginsWith", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ email: { beginsWith: "a" } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ email: { beginsWith: "a" } })
+        .execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].email).toBe("alice@test.com");
+      expect(result.items[0]?.email).toBe("alice@test.com");
     });
 
     it("should filter with gte", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ score: { gte: 200 } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ score: { gte: 200 } })
+        .execute();
       expect(result.items.length).toBe(2);
     });
 
     it("should filter with lte", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ score: { lte: 200 } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ score: { lte: 200 } })
+        .execute();
       expect(result.items.length).toBe(2);
     });
 
     it("should filter with gt", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ score: { gt: 200 } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ score: { gt: 200 } })
+        .execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].score).toBe(300);
+      expect(result.items[0]?.score).toBe(300);
     });
 
     it("should filter with lt", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ score: { lt: 200 } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ score: { lt: 200 } })
+        .execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].score).toBe(100);
+      expect(result.items[0]?.score).toBe(100);
     });
 
     it("should filter with between", async () => {
-      const result = await testTable.query({ id: filterPrefix }).filter({ score: { between: [150, 250] } }).execute();
+      const result = await testTable
+        .query({ id: filterPrefix })
+        .filter({ score: { between: [150, 250] } })
+        .execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].score).toBe(200);
+      expect(result.items[0]?.score).toBe(200);
     });
 
     it("should combine multiple filters", async () => {
@@ -464,7 +483,7 @@ describe("DynamoDB Integration Tests", () => {
         .filter({ score: { gte: 100 }, name: { beginsWith: "B" } })
         .execute();
       expect(result.items.length).toBe(1);
-      expect(result.items[0].name).toBe("Bob");
+      expect(result.items[0]?.name).toBe("Bob");
     });
   });
 
