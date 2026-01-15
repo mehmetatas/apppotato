@@ -1,7 +1,7 @@
 import type { ComponentType } from "preact";
 import Router, { type RoutableProps } from "preact-router";
 import { Layout } from "./layout/Layout";
-import { ApiTestPage, AuthPage, ErrorPage, HomePage, UserDetailPage, UsersListPage } from "./pages";
+import { AuthPage, ErrorPage, HomePage } from "./pages";
 
 type AppProps = {
   pageProps: Record<string, unknown>;
@@ -11,9 +11,9 @@ type AppProps = {
 // Routes with Layout (header/footer)
 const routesWithLayout: Record<string, ComponentType<any>> = {
   "/": HomePage,
-  "/users": UsersListPage,
-  "/users/:id": UserDetailPage,
-  "/api-test": ApiTestPage,
+  // "/users": UsersListPage,
+  // "/users/:id": UserDetailPage,
+  // "/api-test": ApiTestPage,
 };
 
 // Routes without Layout
