@@ -1,7 +1,7 @@
 import type { ComponentType } from "preact";
 import Router, { type RoutableProps } from "preact-router";
 import { Layout } from "./layout/Layout";
-import { ApiTestPage, AuthPage, HomePage, NotFoundPage, UserDetailPage, UsersListPage } from "./pages";
+import { ApiTestPage, AuthPage, ErrorPage, HomePage, UserDetailPage, UsersListPage } from "./pages";
 
 type AppProps = {
   pageProps: Record<string, unknown>;
@@ -36,10 +36,18 @@ const Route = ({
   return <Layout skip={!withLayout}>{page}</Layout>;
 };
 
+// Client-side 404 component for router default
+const ClientNotFound = () => <ErrorPage status={404} message="Page Not Found" />;
+
 export const App = ({ pageProps, status }: AppProps) => {
-  // 404 page - no layout
-  if (status === 404) {
-    return <NotFoundPage />;
+  // Error pages (4xx, 5xx) - no layout
+  if (status >= 400) {
+    const errorProps = pageProps as {
+      status: number;
+      message: string;
+      details?: string[];
+    };
+    return <ErrorPage {...errorProps} />;
   }
 
   return (
@@ -50,7 +58,7 @@ export const App = ({ pageProps, status }: AppProps) => {
       {Object.entries(routesWithoutLayout).map(([path, component]) => (
         <Route key={path} path={path} component={component} pageProps={pageProps} withLayout={false} />
       ))}
-      <Route default component={NotFoundPage} pageProps={pageProps} withLayout={false} />
+      <Route default component={ClientNotFound} pageProps={pageProps} withLayout={false} />
     </Router>
   );
 };

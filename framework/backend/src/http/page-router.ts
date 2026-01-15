@@ -1,10 +1,43 @@
 import { emptySchema, type EmptyRequest, type Schema } from "@broccoliapps/shared";
 import type { Context } from "hono";
 import * as v from "valibot";
+import { log } from "../log";
 import { RequestContext } from "./context";
 import { deserializeRequest } from "./deserializer";
 import { handleError, HttpRouter, setCookies } from "./http-router";
 import { PageResponse } from "./response";
+
+/**
+ * HTTP error that can be thrown from handlers to return a specific status code
+ *
+ * @example
+ * throw new HttpError(401, "Unauthorized");
+ * throw new HttpError(403, "Forbidden");
+ * throw new HttpError(429, "Too Many Requests");
+ */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
+/**
+ * Error information passed to custom error handlers
+ */
+export type PageError = {
+  status: number;
+  message: string;
+  details?: string[];
+};
+
+/**
+ * Custom error handler function type
+ */
+export type PageErrorHandler = (error: PageError, ctx: RequestContext) => Promise<PageResponse>;
 
 /**
  * Handler function type
@@ -26,6 +59,8 @@ export type PageHandlerFn<TRequest> = (request: TRequest, ctx: RequestContext) =
  * });
  */
 export class PageRouter extends HttpRouter {
+  private errorHandler?: PageErrorHandler;
+
   /**
    * Define request schema for typed params
    */
@@ -45,18 +80,33 @@ export class PageRouter extends HttpRouter {
   }
 
   /**
-   * Register a 404 not found handler
+   * Register a custom error handler for all page errors (validation, not found, server errors)
    */
-  notFound(fn: PageHandlerFn<EmptyRequest>): this {
+  onError(fn: PageErrorHandler): this {
+    this.errorHandler = fn;
+
+    // Register Hono's notFound to use the same error handler
     this.hono.notFound(async (c) => {
       if (c.req.path.startsWith("/api")) {
         return c.json({ error: "Not Found" }, 404);
       }
 
+      const notFoundError: PageError = {
+        status: 404,
+        message: "Page Not Found",
+      };
+
       const ctx = new RequestContext(c);
-      const response = await fn({}, ctx);
-      return c.html(response.data, 404);
+      try {
+        const response = await fn(notFoundError, ctx);
+        setCookies(c, response.cookies);
+        return c.html(response.data, 404, response.headers);
+      } catch (handlerError) {
+        log.err("Error handler failed:", { error: handlerError });
+        return c.html("Not Found", 404);
+      }
     });
+
     return this;
   }
 
@@ -71,9 +121,50 @@ export class PageRouter extends HttpRouter {
 
         return c.html(response.data, response.status as 200, response.headers);
       } catch (error) {
-        return handleError(c, error);
+        return this.handlePageError(c, error);
       }
     });
+  }
+
+  private async handlePageError(c: Context, error: unknown): Promise<Response> {
+    if (!this.errorHandler) {
+      return handleError(c, error);
+    }
+
+    const ctx = new RequestContext(c);
+    let pageError: PageError;
+
+    if (error instanceof v.ValiError) {
+      pageError = {
+        status: 400,
+        message: "Validation Error",
+        details: error.issues.map((issue) => {
+          const path = issue.path?.map((p: { key: string | number }) => p.key).join(".") ?? "";
+          return path ? `${path}: ${issue.message}` : issue.message;
+        }),
+      };
+    } else if (error instanceof HttpError) {
+      pageError = {
+        status: error.status,
+        message: error.status >= 500 ? "Internal Server Error" : error.message,
+      };
+    } else {
+      // Log the actual error for debugging, but don't expose to client
+      log.err("Page error:", { error });
+      pageError = {
+        status: 500,
+        message: "Internal Server Error",
+      };
+    }
+
+    try {
+      const response = await this.errorHandler(pageError, ctx);
+      setCookies(c, response.cookies);
+      return c.html(response.data, pageError.status as 400, response.headers);
+    } catch (handlerError) {
+      log.err("Error handler failed:", { error: handlerError });
+      return handleError(c, error);
+    }
   }
 }
 

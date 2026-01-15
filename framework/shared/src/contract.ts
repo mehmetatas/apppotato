@@ -4,9 +4,9 @@ import type { HttpMethod, Schema } from "./types";
 // API Error class for client-side error handling
 export class ApiError extends Error {
   constructor(
-    public status: number,
-    public code: string,
-    message: string
+    public readonly status: number,
+    message: string,
+    public readonly details?: string[]
   ) {
     super(message);
     this.name = "ApiError";
@@ -105,7 +105,7 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new ApiError(response.status, err.code ?? "UNKNOWN", err.message ?? "Request failed");
+      throw new ApiError(response.status ?? 500, err.message ?? "Request failed", err.details);
     }
 
     // Handle 204 No Content
