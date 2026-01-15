@@ -178,7 +178,7 @@ export interface QueryFnSKOnly<T, SKFields extends readonly (keyof T)[]> {
 
 // Put function type
 export interface PutFn<T> {
-  (item: T): Promise<void>;
+  (item: T): Promise<T>;
 }
 
 // PutIfNotExists function type - returns true if created, false if already exists

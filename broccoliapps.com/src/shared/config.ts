@@ -1,8 +1,11 @@
 // Check if running in browser or Node, and if in development mode
 const isBrowser = typeof window !== "undefined";
 const isDev = isBrowser ? window.location.hostname === "localhost" : process.env?.NODE_ENV === "development";
+const env = isDev ? "dev" : "prod"; // todo: add stg and more custom env support
 
 export const config = {
+  env,
+  isProd: env === "prod",
   baseUrl: isDev ? "http://localhost:8080" : "https://www.broccoliapps.com",
   cognito: {
     // These are public values (not secrets)

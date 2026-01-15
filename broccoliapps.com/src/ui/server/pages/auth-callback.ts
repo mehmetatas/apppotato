@@ -1,5 +1,5 @@
-import { db, ttl } from "@broccoliapps/backend";
-import { random } from "@broccoliapps/shared";
+import { db, HttpError, log } from "@broccoliapps/backend";
+import { Duration, random } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { verifyAuthorizationCode } from "../../../auth/cognito-server";
 import { page } from "../lambda";
@@ -10,14 +10,11 @@ page
   })
   .handle("/auth/callback", async (req, ctx) => {
     const codeVerifier = ctx.getCookie("pkce_code_verifier");
+    const app = ctx.getCookie("auth_app");
 
-    if (!codeVerifier) {
-      console.log("pkce_code_verifier cookie not found - auth session expired");
-      return {
-        status: 302,
-        data: "",
-        headers: { Location: "/?error=expired" },
-      };
+    if (!codeVerifier || !app) {
+      log.wrn("pkce_code_verifier or auth_app cookie not found - auth session expired");
+      throw new HttpError(408, "Authentication session timed out. Please try again");
     }
 
     const result = await verifyAuthorizationCode(req.code, codeVerifier);
@@ -31,20 +28,24 @@ page
       };
     }
 
-    await db.broccoliapps.authCodes.put({
+    const expires = Duration.minutes(1).fromNow();
+
+    const authCode = await db.broccoliapps.authCodes.put({
       code: random.token(),
+      app,
       email: result.email,
       name: result.name,
       provider: result.provider,
       userId: result.userId,
-      ttl: ttl(1, "min"),
+      expiresAt: expires.toMilliseconds(),
+      ttl: expires.toSeconds(),
     });
 
     // Clean up PKCE cookie and redirect to app
     return {
       status: 302,
       data: "",
-      headers: { Location: "/" },
+      headers: { Location: "/?code=" + authCode.code },
       cookies: [
         {
           name: "pkce_code_verifier",

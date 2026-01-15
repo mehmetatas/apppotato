@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 import { params } from "./params";
 
 const ALGORITHM = "aes-256-gcm";
@@ -16,7 +16,7 @@ const getKey = async (): Promise<Buffer> => {
   return cachedKey;
 };
 
-export const encrypt = async (plaintext: string): Promise<string> => {
+const encrypt = async (plaintext: string): Promise<string> => {
   const key = await getKey();
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv, {
@@ -30,7 +30,7 @@ export const encrypt = async (plaintext: string): Promise<string> => {
   return result.toString("base64url");
 };
 
-export const decrypt = async (ciphertext: string): Promise<string> => {
+const decrypt = async (ciphertext: string): Promise<string> => {
   const key = await getKey();
   const data = Buffer.from(ciphertext, "base64url");
 
@@ -45,4 +45,14 @@ export const decrypt = async (ciphertext: string): Promise<string> => {
 
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
   return decrypted.toString("utf8");
+};
+
+const sha256 = (data: string): string => {
+  return createHash("sha256").update(data).digest("hex");
+};
+
+export const crypto = {
+  encrypt,
+  decrypt,
+  sha256,
 };

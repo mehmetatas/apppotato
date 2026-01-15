@@ -30,9 +30,10 @@ export const createQueryFn = <T>(config: TableConfig) => {
 };
 
 export const createPutFn = <T>(config: ItemConfig) => {
-  return async (item: T): Promise<void> => {
+  return async (item: T): Promise<T> => {
     const ddbItem = toDdbItem(config, item);
     await executePut<T>({ tableName: config.tableName, item: ddbItem });
+    return item;
   };
 };
 

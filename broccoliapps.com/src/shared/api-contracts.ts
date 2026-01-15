@@ -1,4 +1,6 @@
+import { JwtData } from "@broccoliapps/backend/dist/auth/jwt";
 import { api, coerceNumber } from "@broccoliapps/shared";
+
 import * as v from "valibot";
 
 export const createUser = api("POST", "/users")
@@ -106,3 +108,13 @@ export const createValidationTest = api("POST", "/validation-test")
     received: Record<string, unknown>;
     validatedAt: string;
   }>();
+
+// Real APIs
+
+export const verifyAuthToken = api("POST", "/v1/auth/verify")
+  .withRequest({
+    app: v.pipe(v.string(), v.picklist(["expense-tracker"])),
+    code: v.pipe(v.string(), v.maxLength(64)),
+    signature: v.pipe(v.string(), v.maxLength(256)),
+  })
+  .withResponse<JwtData>();
