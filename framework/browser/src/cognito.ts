@@ -1,3 +1,4 @@
+import { Cookie } from "@broccoliapps/shared";
 import { cookies } from "./cookies";
 
 export type CognitoIdentityProvider = "google" | "facebook" | "apple";
@@ -56,19 +57,23 @@ const signInWith = async (provider: CognitoIdentityProvider, app: string): Promi
 
   const authUrl = `https://${config.domain}/oauth2/authorize?${params.toString()}`;
 
-  cookies.set("pkce_code_verifier", code, {
-    maxAge: 300, // 5 minutes
-    path: "/",
-    sameSite: "Lax",
-    secure: true,
-  });
+  cookies.set(
+    new Cookie("pkce_code_verifier", code, {
+      maxAge: 300, // 5 minutes
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+    })
+  );
 
-  cookies.set("auth_app", app, {
-    maxAge: 300, // 5 minutes
-    path: "/",
-    sameSite: "Lax",
-    secure: true,
-  });
+  cookies.set(
+    new Cookie("auth_app", app, {
+      maxAge: 300, // 5 minutes
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+    })
+  );
 
   window.location.href = authUrl;
 };

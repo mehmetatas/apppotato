@@ -1,15 +1,5 @@
 import * as v from "valibot";
-
-export type Cookie = {
-  name: string;
-  value: string;
-  maxAge?: number;
-  path?: string;
-  domain?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  sameSite?: "Strict" | "Lax" | "None";
-};
+import { Cookie } from "./cookie";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

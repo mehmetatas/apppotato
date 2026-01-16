@@ -1,26 +1,12 @@
-export type HomeProps = {
-  title: string;
-};
+export type HomeProps = {};
 
 export const HomePage = ({}: HomeProps) => {
   return (
     <div class="home-page">
       <svg class="broccoli-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
         <path d="M85 140 Q80 160 82 185 Q85 190 100 190 Q115 190 118 185 Q120 160 115 140" fill="#7cb342" />
-        <path
-          d="M88 145 Q90 165 90 180"
-          stroke="#689f38"
-          stroke-width="2"
-          fill="none"
-          stroke-linecap="round"
-        />
-        <path
-          d="M112 145 Q110 165 110 180"
-          stroke="#689f38"
-          stroke-width="2"
-          fill="none"
-          stroke-linecap="round"
-        />
+        <path d="M88 145 Q90 165 90 180" stroke="#689f38" stroke-width="2" fill="none" stroke-linecap="round" />
+        <path d="M112 145 Q110 165 110 180" stroke="#689f38" stroke-width="2" fill="none" stroke-linecap="round" />
 
         <ellipse cx="100" cy="95" rx="55" ry="50" fill="#4caf50" />
         <circle cx="65" cy="85" r="28" fill="#66bb6a" />
@@ -51,20 +37,8 @@ export const HomePage = ({}: HomeProps) => {
 
         <path d="M85 110 Q100 125 115 110" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round" />
 
-        <path
-          d="M70 78 Q80 75 88 78"
-          stroke="#2e7d32"
-          stroke-width="2.5"
-          fill="none"
-          stroke-linecap="round"
-        />
-        <path
-          d="M112 78 Q120 75 130 78"
-          stroke="#2e7d32"
-          stroke-width="2.5"
-          fill="none"
-          stroke-linecap="round"
-        />
+        <path d="M70 78 Q80 75 88 78" stroke="#2e7d32" stroke-width="2.5" fill="none" stroke-linecap="round" />
+        <path d="M112 78 Q120 75 130 78" stroke="#2e7d32" stroke-width="2.5" fill="none" stroke-linecap="round" />
       </svg>
 
       <p class="coming-soon">Coming Soon</p>

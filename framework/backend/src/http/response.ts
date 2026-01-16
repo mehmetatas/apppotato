@@ -16,8 +16,8 @@ export const createApiResponse = <TRes>(): ApiResponse<TRes> => ({
 
 // Response from page handler - router just returns this as html
 export type PageResponse = {
-  status: number;
-  data?: string; // optional because, no html provided for redirect (301/302) responses
+  status?: number;
+  html?: string; // optional because, no html provided for redirect (301/302) responses
   cookies?: Cookie[];
   headers?: Record<string, string>;
 };

@@ -50,12 +50,12 @@ export type PageHandlerFn<TRequest> = (request: TRequest, ctx: RequestContext) =
  * @example
  * // Simple route (no params)
  * page.handle("/users", async () => {
- *   return render(<UsersListPage users={users} />).withOptions({ title: "Users" });
+ *   return render(<UsersListPage users={users} />, { title: "Users" });
  * });
  *
  * // Route with params
  * page.withRequest({ id: v.string() }).handle("/users/:id", async (req) => {
- *   return render(<UserDetailPage id={req.id} />).withOptions({ title: "User" });
+ *   return render(<UserDetailPage id={req.id} />, { title: "User" });
  * });
  */
 export class PageRouter extends HttpRouter {
@@ -100,7 +100,7 @@ export class PageRouter extends HttpRouter {
       try {
         const response = await fn(notFoundError, ctx);
         setCookies(c, response.cookies);
-        return c.html(response.data ?? "", 404, response.headers);
+        return c.html(response.html ?? "", 404, response.headers);
       } catch (handlerError) {
         log.err("Error handler failed:", { error: handlerError });
         return c.html("Not Found", 404);
@@ -119,7 +119,7 @@ export class PageRouter extends HttpRouter {
 
         setCookies(c, response.cookies);
 
-        return c.html(response.data ?? "", response.status as 200, response.headers);
+        return c.html(response.html ?? "", response.status as 200, response.headers);
       } catch (error) {
         return this.handlePageError(c, error);
       }
@@ -160,7 +160,7 @@ export class PageRouter extends HttpRouter {
     try {
       const response = await this.errorHandler(pageError, ctx);
       setCookies(c, response.cookies);
-      return c.html(response.data ?? "", pageError.status as 400, response.headers);
+      return c.html(response.html ?? "", pageError.status as 400, response.headers);
     } catch (handlerError) {
       log.err("Error handler failed:", { error: handlerError });
       return handleError(c, error);

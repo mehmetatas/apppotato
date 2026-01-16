@@ -1,35 +1,7 @@
-import type { Cookie } from "@broccoliapps/shared";
+import { Cookie, CookieOptions } from "@broccoliapps/shared";
 
-export type CookieOptions = Omit<Cookie, "name" | "value">;
-
-const set = (name: string, value: string, options: CookieOptions = {}) => {
-  let cookieString = `${name}=${encodeURIComponent(value)}`;
-
-  if (options.maxAge !== undefined) {
-    cookieString += `; Max-Age=${options.maxAge}`;
-  }
-
-  if (options.path) {
-    cookieString += `; Path=${options.path}`;
-  }
-
-  if (options.domain) {
-    cookieString += `; Domain=${options.domain}`;
-  }
-
-  if (options.sameSite) {
-    cookieString += `; SameSite=${options.sameSite}`;
-  }
-
-  if (options.secure) {
-    cookieString += "; Secure";
-  }
-
-  if (options.httpOnly) {
-    cookieString += "; HttpOnly";
-  }
-
-  document.cookie = cookieString;
+const set = (cookie: Cookie) => {
+  document.cookie = cookie.toString();
 };
 
 const get = (name: string): string | null => {
@@ -43,8 +15,8 @@ const get = (name: string): string | null => {
   return null;
 };
 
-const remove = (name: string, options: Omit<CookieOptions, "maxAge"> = {}) => {
-  set(name, "", { ...options, maxAge: 0 });
+const remove = (key: string, options: Omit<CookieOptions, "maxAge"> = {}) => {
+  set(Cookie.delete(key, options));
 };
 
 export const cookies = {

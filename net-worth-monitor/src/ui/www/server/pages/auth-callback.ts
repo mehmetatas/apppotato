@@ -1,7 +1,7 @@
 import { auth, log } from "@broccoliapps/backend";
 import { Duration } from "@broccoliapps/shared";
 import * as v from "valibot";
-import { page } from "../lambda";
+import { www } from "../lambda";
 
 auth.setConfig({
   appId: "networthmonitor",
@@ -9,7 +9,7 @@ auth.setConfig({
   refreshTokenLifetime: Duration.years(1),
 });
 
-page
+www
   .withRequest({
     code: v.string(),
   })

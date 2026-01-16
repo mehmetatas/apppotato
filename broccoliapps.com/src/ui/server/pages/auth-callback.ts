@@ -1,5 +1,5 @@
 import { db, HttpError, log } from "@broccoliapps/backend";
-import { AppId, Duration, globalConfig, random } from "@broccoliapps/shared";
+import { AppId, Cookie, Duration, globalConfig, random } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { verifyAuthorizationCode } from "../../../auth/cognito-server";
 import { page } from "../lambda";
@@ -23,7 +23,7 @@ page
       console.log("Failed to verify authorization code:", result.error);
       return {
         status: 302,
-        data: "",
+        html: "",
         headers: { Location: `/?error=${result.error}` },
       };
     }
@@ -46,22 +46,16 @@ page
       status: 302,
       headers: { Location: globalConfig.apps[app as AppId].baseUrl + "/auth/callback?code=" + authCode.code },
       cookies: [
-        {
-          name: "pkce_code_verifier",
-          value: "",
-          maxAge: 0,
+        Cookie.delete("pkce_code_verifier", {
           path: "/",
-          sameSite: "Lax",
+          sameSite: "lax",
           secure: true,
-        },
-        {
-          name: "app",
-          value: "",
-          maxAge: 0,
+        }),
+        Cookie.delete("app", {
           path: "/",
-          sameSite: "Lax",
+          sameSite: "lax",
           secure: true,
-        },
+        }),
       ],
     };
   });

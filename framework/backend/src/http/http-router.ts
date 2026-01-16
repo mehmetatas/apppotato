@@ -9,17 +9,7 @@ export const setCookies = (c: Context, cookies?: Cookie[]): void => {
     return;
   }
   for (const cookie of cookies) {
-    c.header(
-      "Set-Cookie",
-      `${cookie.name}=${cookie.value}` +
-        (cookie.maxAge !== undefined ? `; Max-Age=${cookie.maxAge}` : "") +
-        (cookie.path ? `; Path=${cookie.path}` : "") +
-        (cookie.domain ? `; Domain=${cookie.domain}` : "") +
-        (cookie.secure ? "; Secure" : "") +
-        (cookie.httpOnly ? "; HttpOnly" : "") +
-        (cookie.sameSite ? `; SameSite=${cookie.sameSite}` : ""),
-      { append: true }
-    );
+    c.header("Set-Cookie", cookie.toString(), { append: true });
   }
 };
 

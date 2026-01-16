@@ -2,7 +2,7 @@ import { globalConfig } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { AuthPage } from "../../client/pages/AuthPage";
 import { page } from "../lambda";
-import { render } from "../page-response";
+import { render } from "../render";
 
 page
   .withRequest({
@@ -10,7 +10,7 @@ page
     provider: v.picklist(["google"]),
   })
   .handle("/auth", async (req) => {
-    return render(<AuthPage app={req.app} provider={req.provider} />).withOptions({
+    return render(<AuthPage app={req.app} provider={req.provider} />, {
       title: "Sign In",
       skipLayout: true,
     });

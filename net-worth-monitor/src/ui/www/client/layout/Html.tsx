@@ -7,8 +7,8 @@ export type HtmlProps = {
   title?: string;
   description?: string;
   pageProps?: Record<string, unknown>;
-  staticPage?: boolean;
-  skipLayout?: boolean;
+  staticPage?: boolean; // js bundle and __PAGE_PROPS__ are not set for static pages
+  skipLayout?: boolean; // page is rendered directly inside body
   status?: number;
   children: ComponentChildren;
 };
@@ -32,7 +32,7 @@ export const Html = ({
   // In dev mode, Vite serves JS with HMR; in prod, load from static path
   const cssFile = buildId ? `/static/app.${buildId}.css` : "/static/app.css";
   const jsFile = isDevMode
-    ? "http://localhost:5174/src/ui/client/index.tsx"
+    ? "http://localhost:5174/src/ui/www/client/index.tsx"
     : buildId
       ? `/static/app.${buildId}.js`
       : "/static/app.js";
