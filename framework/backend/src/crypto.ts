@@ -1,11 +1,12 @@
+import { AppId, globalConfig } from "@broccoliapps/shared";
 import {
   createCipheriv,
   createDecipheriv,
   createHash,
-  publicEncrypt,
   privateDecrypt,
   privateEncrypt,
   publicDecrypt,
+  publicEncrypt,
   randomBytes,
 } from "crypto";
 import { params } from "./params";
@@ -16,17 +17,18 @@ const AUTH_TAG_LENGTH = 16;
 
 let cachedKey: Buffer | null = null;
 
-const getKey = async (): Promise<Buffer> => {
+const getSharedKey = async (): Promise<Buffer> => {
   if (cachedKey) {
     return cachedKey;
   }
+  // TODO: Access to this SSM param from different services is not configured in CDK
   const keyBase64 = await params.get("/broccoliapps/shared-aes-key");
   cachedKey = Buffer.from(keyBase64, "base64");
   return cachedKey;
 };
 
 const encrypt = async (plaintext: string): Promise<string> => {
-  const key = await getKey();
+  const key = await getSharedKey();
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv, {
     authTagLength: AUTH_TAG_LENGTH,
@@ -40,7 +42,7 @@ const encrypt = async (plaintext: string): Promise<string> => {
 };
 
 const decrypt = async (ciphertext: string): Promise<string> => {
-  const key = await getKey();
+  const key = await getSharedKey();
   const data = Buffer.from(ciphertext, "base64url");
 
   const iv = data.subarray(0, IV_LENGTH);
@@ -60,24 +62,28 @@ const sha256 = (data: string): string => {
   return createHash("sha256").update(data).digest("hex");
 };
 
-const rsaPublicEncrypt = (plaintext: string, publicKey: string): string => {
+const rsaPublicDecrypt = (appId: AppId, ciphertext: string): string => {
+  const { publicKey } = globalConfig.apps[appId];
+  const decrypted = publicDecrypt(publicKey, Buffer.from(ciphertext, "base64url"));
+  return decrypted.toString("utf8");
+};
+
+const rsaPublicEncrypt = (appId: AppId, plaintext: string): string => {
+  const { publicKey } = globalConfig.apps[appId];
   const encrypted = publicEncrypt(publicKey, Buffer.from(plaintext, "utf8"));
   return encrypted.toString("base64url");
 };
 
-const rsaPrivateDecrypt = (ciphertext: string, privateKey: string): string => {
+const rsaPrivateDecrypt = async (appId: AppId, ciphertext: string): Promise<string> => {
+  const privateKey = await params.getAppKey(appId);
   const decrypted = privateDecrypt(privateKey, Buffer.from(ciphertext, "base64url"));
   return decrypted.toString("utf8");
 };
 
-const rsaPrivateEncrypt = (plaintext: string, privateKey: string): string => {
+const rsaPrivateEncrypt = async (appId: AppId, plaintext: string): Promise<string> => {
+  const privateKey = await params.getAppKey(appId);
   const encrypted = privateEncrypt(privateKey, Buffer.from(plaintext, "utf8"));
   return encrypted.toString("base64url");
-};
-
-const rsaPublicDecrypt = (ciphertext: string, publicKey: string): string => {
-  const decrypted = publicDecrypt(publicKey, Buffer.from(ciphertext, "base64url"));
-  return decrypted.toString("utf8");
 };
 
 export const crypto = {

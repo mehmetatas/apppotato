@@ -1,19 +1,18 @@
 import { ApiError, AppId, epoch, globalConfig, random } from "@broccoliapps/shared";
 import { crypto } from "../crypto";
 import { tokens } from "../db/schemas/shared";
-import { params } from "../params";
+import { log } from "../log";
 import { getAuthConfig } from "./config";
 import { jwt, JwtData } from "./jwt";
 
 export type AuthTokens = { accessToken: string; refreshToken: string };
 
 const exchange = async (authCode: string): Promise<AuthTokens> => {
-  const { appId: app } = getAuthConfig();
+  const { appId } = getAuthConfig();
 
-  const privateKey = await params.getAppKey(app);
-  const code = crypto.rsaPrivateEncrypt(authCode, privateKey);
+  const code = await crypto.rsaPrivateEncrypt(appId, authCode);
 
-  const body = JSON.stringify({ app, code });
+  const body = JSON.stringify({ app: appId, code });
 
   const resp = await fetch(globalConfig.apps["broccoliapps-com"].baseUrl + "/api/v1/auth/verify", {
     method: "POST",
@@ -38,8 +37,9 @@ const exchange = async (authCode: string): Promise<AuthTokens> => {
 
 const verifyAuthCode = (app: AppId, encrypted: string) => {
   try {
-    return crypto.rsaPublicDecrypt(encrypted, globalConfig.apps[app].publicKey);
-  } catch {
+    return crypto.rsaPublicDecrypt(app, encrypted);
+  } catch (error) {
+    log.wrn("Could not decrypt auth code", { app, error });
     return undefined;
   }
 };
