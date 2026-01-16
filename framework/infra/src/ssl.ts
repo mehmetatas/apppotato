@@ -1,7 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { aws_certificatemanager as acm, aws_route53 as route53 } from "aws-cdk-lib";
 
-export const createSslCert = (domain: string, awsAccount: string) => {
+export const createSslCert = (awsAccount: string, domain: string) => {
   const stackName = domain.replace(".", "-") + "-ssl-cert";
 
   const app = new cdk.App();
@@ -36,12 +36,3 @@ export const createSslCert = (domain: string, awsAccount: string) => {
 
   app.synth();
 };
-
-// CLI runner
-const [account, domain] = process.argv.slice(2);
-if (!account || !domain) {
-  console.log("Usage: npm run ssl -- <account> <domain>");
-  console.log("Example: npm run ssl -- 123456789012 example.com");
-} else {
-  createSslCert(domain, account);
-}

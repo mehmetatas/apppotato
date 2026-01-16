@@ -1,0 +1,11 @@
+import { serve } from "@broccoliapps/dev-tools";
+import { api } from "../../src/api/lambda";
+import { page } from "../../src/ui/server/lambda";
+
+serve({
+  port: 8081,
+  routes: {
+    "/api/*": api,
+    "*": page,
+  },
+});

@@ -40,27 +40,27 @@ export class Duration {
   }
 
   toSeconds(): number {
-    return this.milliseconds / 1000;
+    return Math.round(this.milliseconds / 1000);
   }
 
   toMinutes(): number {
-    return this.milliseconds / (60 * 1000);
+    return Math.round(this.milliseconds / (60 * 1000));
   }
 
   toHours(): number {
-    return this.milliseconds / (60 * 60 * 1000);
+    return Math.round(this.milliseconds / (60 * 60 * 1000));
   }
 
   toDays(): number {
-    return this.milliseconds / (24 * 60 * 60 * 1000);
+    return Math.round(this.milliseconds / (24 * 60 * 60 * 1000));
   }
 
   toMonths(): number {
-    return this.milliseconds / ((365.25 / 12) * 24 * 60 * 60 * 1000);
+    return Math.round(this.milliseconds / ((365.25 / 12) * 24 * 60 * 60 * 1000));
   }
 
   toYears(): number {
-    return this.milliseconds / (365.25 * 24 * 60 * 60 * 1000);
+    return Math.round(this.milliseconds / (365.25 * 24 * 60 * 60 * 1000));
   }
 
   // Adds current unix epoch to duration

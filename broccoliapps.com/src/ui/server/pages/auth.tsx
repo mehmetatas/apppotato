@@ -1,3 +1,4 @@
+import { globalConfig } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { AuthPage } from "../../client/pages/AuthPage";
 import { page } from "../lambda";
@@ -5,7 +6,7 @@ import { render } from "../page-response";
 
 page
   .withRequest({
-    app: v.picklist(["expense-tracker"]),
+    app: v.picklist(Object.keys(globalConfig.apps)),
     provider: v.picklist(["google"]),
   })
   .handle("/auth", async (req) => {

@@ -97,6 +97,7 @@ const buildClient = async () => {
     // Bundle everything including Preact
     define: {
       "process.env.NODE_ENV": JSON.stringify(isDevBuild ? "development" : "production"),
+      "import.meta.env.DEV": isDevBuild ? "true" : "false",
     },
   });
 

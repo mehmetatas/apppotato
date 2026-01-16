@@ -47,7 +47,7 @@ export const handleError = (c: Context, error: unknown): Response => {
 };
 
 export class HttpRouter {
-  protected hono: Hono;
+  protected readonly hono: Hono;
 
   constructor() {
     this.hono = new Hono();
@@ -65,5 +65,9 @@ export class HttpRouter {
    */
   lambdaHandler() {
     return handle(this.hono);
+  }
+
+  devHandler() {
+    return (c: Context) => this.hono.fetch(c.req.raw);
   }
 }

@@ -1,0 +1,10 @@
+{
+  "hosted-zone:account=155305329201:domainName=networthmonitor.com:region=us-east-1": {
+    "Id": "/hostedzone/Z08156453CZ8ZU7BW27JM",
+    "Name": "networthmonitor.com."
+  },
+  "hosted-zone:account=155305329201:domainName=networthmonitor.com:region=us-west-2": {
+    "Id": "/hostedzone/Z08156453CZ8ZU7BW27JM",
+    "Name": "networthmonitor.com."
+  }
+}

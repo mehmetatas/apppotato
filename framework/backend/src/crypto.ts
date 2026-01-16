@@ -1,4 +1,13 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  publicEncrypt,
+  privateDecrypt,
+  privateEncrypt,
+  publicDecrypt,
+  randomBytes,
+} from "crypto";
 import { params } from "./params";
 
 const ALGORITHM = "aes-256-gcm";
@@ -51,8 +60,32 @@ const sha256 = (data: string): string => {
   return createHash("sha256").update(data).digest("hex");
 };
 
+const rsaPublicEncrypt = (plaintext: string, publicKey: string): string => {
+  const encrypted = publicEncrypt(publicKey, Buffer.from(plaintext, "utf8"));
+  return encrypted.toString("base64url");
+};
+
+const rsaPrivateDecrypt = (ciphertext: string, privateKey: string): string => {
+  const decrypted = privateDecrypt(privateKey, Buffer.from(ciphertext, "base64url"));
+  return decrypted.toString("utf8");
+};
+
+const rsaPrivateEncrypt = (plaintext: string, privateKey: string): string => {
+  const encrypted = privateEncrypt(privateKey, Buffer.from(plaintext, "utf8"));
+  return encrypted.toString("base64url");
+};
+
+const rsaPublicDecrypt = (ciphertext: string, publicKey: string): string => {
+  const decrypted = publicDecrypt(publicKey, Buffer.from(ciphertext, "base64url"));
+  return decrypted.toString("utf8");
+};
+
 export const crypto = {
   encrypt,
   decrypt,
   sha256,
+  rsaPublicEncrypt,
+  rsaPrivateDecrypt,
+  rsaPrivateEncrypt,
+  rsaPublicDecrypt,
 };

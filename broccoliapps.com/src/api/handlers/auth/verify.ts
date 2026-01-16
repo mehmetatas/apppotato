@@ -1,27 +1,29 @@
-import { auth, HttpError } from "@broccoliapps/backend";
+import { auth, HttpError, log } from "@broccoliapps/backend";
 import { authCodes } from "@broccoliapps/backend/dist/db/schemas/broccoliapps";
-import { isExpired } from "@broccoliapps/shared";
+import { AppId, isExpired } from "@broccoliapps/shared";
 import { verifyAuthToken } from "../../../shared/api-contracts";
-import { config } from "../../../shared/config";
 import { api } from "../../lambda";
 
 api.register(verifyAuthToken, async (req, res) => {
-  const authCode = await authCodes.get({ code: req.code });
+  try {
+    const code = auth.verifyAuthCode(req.app as AppId, req.code);
 
-  if (!authCode || isExpired(authCode) || authCode.app !== req.app) {
-    throw new HttpError(404, "Auth code not found");
+    if (!code) {
+      throw new HttpError(403, "Auth code could not be verified");
+    }
+
+    const authCode = await authCodes.get({ code });
+
+    if (!authCode || isExpired(authCode) || authCode.app !== req.app) {
+      throw new HttpError(404, "Auth code not found");
+    }
+
+    await authCodes.delete(authCode);
+
+    const { name, provider, email, userId } = authCode;
+    return res.ok({ name, provider, email, userId });
+  } catch (error) {
+    log.err("Failed to verify token", { error });
+    throw error;
   }
-
-  const secretParam = `/broccoliapps-com${config.isProd ? "" : `-${config.env}`}/${req.app}-app-secret`;
-
-  const isValid = await auth.verifyAuthCodeSignature(secretParam, req.code, req.signature);
-
-  if (!isValid) {
-    throw new HttpError(403, "Invalid exchange code signature");
-  }
-
-  await authCodes.delete(authCode);
-
-  const { name, provider, email, userId } = authCode;
-  return res.ok({ name, provider, email, userId });
 });

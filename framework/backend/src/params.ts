@@ -23,6 +23,9 @@ const get = async (name: string): Promise<string> => {
   return response.Parameter.Value;
 };
 
+const getAppKey = (app: string) => get(`/${app}/app-key`);
+
 export const params = {
   get,
+  getAppKey,
 };

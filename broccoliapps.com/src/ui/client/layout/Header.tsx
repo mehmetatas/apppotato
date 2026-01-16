@@ -10,12 +10,6 @@ export const Header = () => {
       <a href="/" class="logo">
         <span class="logo-text">Broccoli Apps</span>
       </a>
-      <nav class="nav">
-        <a href="/">Home</a>
-      </nav>
-      <button class="sign-in-btn" onClick={handleSignIn}>
-        Sign in with Google
-      </button>
     </header>
   );
 };

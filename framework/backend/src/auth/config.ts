@@ -1,20 +1,10 @@
-import { Duration } from "@broccoliapps/shared";
+import { AppId, Duration } from "@broccoliapps/shared";
 import { HttpError } from "../http";
 
 export type AuthConfig = {
-  app: string;
-  accessToken: {
-    jwtPrivateKeyParam: string;
-    jwtPublicKey: string;
-    lifetime: Duration;
-  };
-  refreshToken: {
-    lifetime: Duration;
-  };
-  exchange: {
-    verifyEndpoint: string;
-    secretParam: string;
-  };
+  appId: AppId;
+  accessTokenLifetime: Duration;
+  refreshTokenLifetime: Duration;
 };
 
 let config: AuthConfig;

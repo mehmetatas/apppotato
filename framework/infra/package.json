@@ -18,8 +18,7 @@
   },
   "scripts": {
     "build": "npm run clean && tsc",
-    "clean": "rm -rf dist/",
-    "ssl": "tsx src/ssl.ts"
+    "clean": "rm -rf dist/"
   },
   "dependencies": {
     "@aws-sdk/client-ssm": "^3.967.0",

@@ -1,4 +1,4 @@
-import { ApiError, epoch, random } from "@broccoliapps/shared";
+import { ApiError, AppId, epoch, globalConfig, random } from "@broccoliapps/shared";
 import { crypto } from "../crypto";
 import { tokens } from "../db/schemas/shared";
 import { params } from "../params";
@@ -8,23 +8,20 @@ import { jwt, JwtData } from "./jwt";
 export type AuthTokens = { accessToken: string; refreshToken: string };
 
 const exchange = async (authCode: string): Promise<AuthTokens> => {
-  const {
-    app,
-    exchange: { secretParam, verifyEndpoint },
-  } = getAuthConfig();
+  const { appId: app } = getAuthConfig();
 
-  const appSecret = await params.get(secretParam);
-  const signature = crypto.sha256(appSecret + authCode);
+  const privateKey = await params.getAppKey(app);
+  const code = crypto.rsaPrivateEncrypt(authCode, privateKey);
 
-  const resp = await fetch(verifyEndpoint, {
+  const body = JSON.stringify({ app, code });
+
+  const resp = await fetch(globalConfig.apps["broccoliapps-com"].baseUrl + "/api/v1/auth/verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      app,
-      authCode,
-      signature,
-    }),
+    headers: { "Content-Type": "application/json", "x-amz-content-sha256": crypto.sha256(body) },
+    body,
   });
+
+  console.log(resp.status);
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
@@ -39,10 +36,12 @@ const exchange = async (authCode: string): Promise<AuthTokens> => {
   return { accessToken, refreshToken };
 };
 
-const verifyAuthCodeSignature = async (secretParam: string, authCode: string, signature: string) => {
-  const appSecret = await params.get(secretParam);
-  const calculatedSignatrue = crypto.sha256(appSecret + authCode);
-  return signature === calculatedSignatrue;
+const verifyAuthCode = (app: AppId, encrypted: string) => {
+  try {
+    return crypto.rsaPublicDecrypt(encrypted, globalConfig.apps[app].publicKey);
+  } catch {
+    return undefined;
+  }
 };
 
 const refresh = async (jwtData: JwtData, refreshToken: string): Promise<AuthTokens | undefined> => {
@@ -53,7 +52,7 @@ const refresh = async (jwtData: JwtData, refreshToken: string): Promise<AuthToke
   }
 
   // if refresh token completed 80% of its life time refresh it too
-  if ((token.expiresAt - epoch.millis()) / getAuthConfig().refreshToken.lifetime.toMilliseconds() > 0.8) {
+  if ((token.expiresAt - epoch.millis()) / getAuthConfig().refreshTokenLifetime.toMilliseconds() > 0.8) {
     [refreshToken] = await Promise.all([createRefreshToken(jwtData.userId), tokens.delete({ hash })]);
   }
 
@@ -62,7 +61,7 @@ const refresh = async (jwtData: JwtData, refreshToken: string): Promise<AuthToke
   return { accessToken, refreshToken };
 };
 
-const verifyAccessToken = (accessToken: string) => {
+const verifyAccessToken = async (accessToken: string) => {
   const decoded = jwt.verify(accessToken);
   if (!decoded) {
     return false;
@@ -81,7 +80,7 @@ const createRefreshToken = async (userId: string): Promise<string> => {
   const token = random.token(128);
   const hash = crypto.sha256(token);
 
-  const expires = getAuthConfig().refreshToken.lifetime.fromNow();
+  const expires = getAuthConfig().refreshTokenLifetime.fromNow();
 
   await tokens.put({
     hash,
@@ -97,7 +96,7 @@ const createRefreshToken = async (userId: string): Promise<string> => {
 
 export const authToken = {
   exchange,
-  verifyAuthCodeSignature,
+  verifyAuthCode,
   refresh,
   verifyAccessToken,
   // todo: token invalidation

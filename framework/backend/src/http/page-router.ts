@@ -100,7 +100,7 @@ export class PageRouter extends HttpRouter {
       try {
         const response = await fn(notFoundError, ctx);
         setCookies(c, response.cookies);
-        return c.html(response.data, 404, response.headers);
+        return c.html(response.data ?? "", 404, response.headers);
       } catch (handlerError) {
         log.err("Error handler failed:", { error: handlerError });
         return c.html("Not Found", 404);
@@ -110,7 +110,7 @@ export class PageRouter extends HttpRouter {
     return this;
   }
 
-  private registerRoute<TReq>(path: string, schema: Schema<TReq>, fn: PageHandlerFn<TReq>): void {
+  registerRoute<TReq>(path: string, schema: Schema<TReq>, fn: PageHandlerFn<TReq>): void {
     this.hono.get(path, async (c: Context): Promise<Response> => {
       try {
         const request = await deserializeRequest(c, "GET", schema);
@@ -119,7 +119,7 @@ export class PageRouter extends HttpRouter {
 
         setCookies(c, response.cookies);
 
-        return c.html(response.data, response.status as 200, response.headers);
+        return c.html(response.data ?? "", response.status as 200, response.headers);
       } catch (error) {
         return this.handlePageError(c, error);
       }
@@ -160,7 +160,7 @@ export class PageRouter extends HttpRouter {
     try {
       const response = await this.errorHandler(pageError, ctx);
       setCookies(c, response.cookies);
-      return c.html(response.data, pageError.status as 400, response.headers);
+      return c.html(response.data ?? "", pageError.status as 400, response.headers);
     } catch (handlerError) {
       log.err("Error handler failed:", { error: handlerError });
       return handleError(c, error);
@@ -178,7 +178,7 @@ class PageRouteWithRequest<TReq extends Record<string, unknown>> {
   ) {}
 
   handle(path: string, fn: PageHandlerFn<TReq>): PageRouter {
-    this.router["registerRoute"](path, this.schema, fn);
+    this.router.registerRoute(path, this.schema, fn);
     return this.router;
   }
 }

@@ -6,7 +6,6 @@ serve({
   port: 8080,
   routes: {
     "/api/*": api,
-    "/health/*": api,
     "*": page,
   },
 });

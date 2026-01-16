@@ -1,5 +1,5 @@
 import { db, HttpError, log } from "@broccoliapps/backend";
-import { Duration, random } from "@broccoliapps/shared";
+import { AppId, Duration, globalConfig, random } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { verifyAuthorizationCode } from "../../../auth/cognito-server";
 import { page } from "../lambda";
@@ -12,7 +12,7 @@ page
     const codeVerifier = ctx.getCookie("pkce_code_verifier");
     const app = ctx.getCookie("auth_app");
 
-    if (!codeVerifier || !app) {
+    if (!codeVerifier || !app || !Object.keys(globalConfig.apps).includes(app)) {
       log.wrn("pkce_code_verifier or auth_app cookie not found - auth session expired");
       throw new HttpError(408, "Authentication session timed out. Please try again");
     }
@@ -44,8 +44,7 @@ page
     // Clean up PKCE cookie and redirect to app
     return {
       status: 302,
-      data: "",
-      headers: { Location: "/?code=" + authCode.code },
+      headers: { Location: globalConfig.apps[app as AppId].baseUrl + "/auth/callback?code=" + authCode.code },
       cookies: [
         {
           name: "pkce_code_verifier",
