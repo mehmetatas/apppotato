@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Dark mode color scheme */
+.dark {
+  color-scheme: dark;
+}
+
 /* Base styles */
 body {
   font-family: "Inter", system-ui, sans-serif;

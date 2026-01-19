@@ -1,15 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
-  DynamoDBDocumentClient,
-  QueryCommand,
-  QueryCommandInput,
-  PutCommand,
-  GetCommand,
-  DeleteCommand,
   BatchGetCommand,
   BatchWriteCommand,
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
-import type { QueryResult, DdbItem } from "./types";
+import type { DdbItem, QueryResult } from "./types";
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -47,12 +47,16 @@ const buildQueryInput = (params: QueryParams): QueryCommandInput => ({
 });
 
 export const executeQuery = async <T>(params: QueryParams): Promise<QueryResult<DdbItem<T>>> => {
+  const queryInput = {
+    ...buildQueryInput(params),
+    Limit: params.limit,
+    ScanIndexForward: !params.reverse,
+  };
+
+  // log.dbg("Executing query", { queryInput });
+
   const response = await docClient.send(
-    new QueryCommand({
-      ...buildQueryInput(params),
-      Limit: params.limit,
-      ScanIndexForward: !params.reverse,
-    })
+    new QueryCommand(queryInput)
   );
 
   return {

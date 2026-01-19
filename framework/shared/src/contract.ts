@@ -28,6 +28,15 @@ export const setBaseUrl = (url: string): void => {
   globalBaseUrl = url;
 };
 
+// Global access token getter for authenticated requests
+type TokenProvider = {
+  get: () => Promise<string | undefined>
+};
+let tokenProvider: TokenProvider = { get: () => Promise.resolve(undefined) };
+export const setTokenProvider = (provider: TokenProvider): void => {
+  tokenProvider = provider;
+};
+
 // Extract path param names from path (e.g., "/users/:id" -> ["id"])
 const extractPathParams = (path: string): string[] => {
   const matches = path.match(/:([^/]+)/g);
@@ -51,7 +60,7 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
     public readonly method: HttpMethod,
     public readonly path: string,
     public readonly schema: Schema<TReq>
-  ) {}
+  ) { }
 
   /**
    * Invoke this API contract
@@ -89,6 +98,12 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
     // Build headers
     const headers: Record<string, string> = {};
     let body: string | undefined;
+
+    // Add access token if available
+    const accessToken = await tokenProvider.get();
+    if (accessToken) {
+      headers["x-access-token"] = accessToken;
+    }
 
     if (hasBody) {
       body = JSON.stringify(remaining);

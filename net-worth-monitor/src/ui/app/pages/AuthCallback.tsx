@@ -1,7 +1,7 @@
 import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
-import { postAuthExchange } from "../../../../shared/api-contracts";
+import { authExchange } from "../../../shared/api-contracts";
 
 export const AuthCallback = () => {
   const [error, setError] = useState<string | null>(null);
@@ -15,12 +15,18 @@ export const AuthCallback = () => {
       return;
     }
 
-    postAuthExchange
+    authExchange
       .invoke({ code })
-      .then(({ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt }) => {
+      .then(({ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user }) => {
         cache.set("accessToken", accessToken, accessTokenExpiresAt);
         cache.set("refreshToken", refreshToken, refreshTokenExpiresAt);
-        route("/app");
+        cache.set("user", user);
+        // Route to onboarding if user hasn't set their currency yet
+        if (!user.targetCurrency) {
+          route("/app/onboarding");
+        } else {
+          route("/app");
+        }
       })
       .catch((err) => setError(err.message));
   }, []);

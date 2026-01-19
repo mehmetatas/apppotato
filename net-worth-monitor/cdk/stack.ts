@@ -16,6 +16,5 @@ await app("networthmonitor")
   .withDomain(DOMAIN, ["www", ""], SSL_CERT_ARN)
   .withLambdaOrigin("/*", path.join(__dirname, "../dist/www")) // SSR (default)
   .withLambdaOrigin("/api/*", path.join(__dirname, "../dist/api")) // API
-  .withLambdaOrigin("/app/*", path.join(__dirname, "../dist/app")) // SPA
   .withS3Origin("/static/*", path.join(__dirname, "../dist/static")) // Static assets
   .build();

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
-import { Header } from "./Header";
 import { Footer } from "./Footer";
+import { Header } from "./Header";
 
 type LayoutProps = {
   children: ComponentChildren;
@@ -13,9 +13,9 @@ export const Layout = ({ children, skip = false }: LayoutProps) => {
   }
 
   return (
-    <div class="flex flex-col min-h-screen bg-gradient-to-br from-slate-50 to-slate-200">
+    <div class="flex flex-col min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-200">
       <Header />
-      <main class="flex-1 p-8 max-w-6xl mx-auto w-full">{children}</main>
+      <main class="flex-1 py-8 px-4 max-w-6xl mx-auto w-full">{children}</main>
       <Footer />
     </div>
   );

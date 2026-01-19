@@ -43,7 +43,8 @@ const buildSKValue = (skFields: string[], skValue: Record<string, unknown>): str
 // Determine SK condition type
 const buildSKCondition = (
   skFields: string[],
-  skFilter: Record<string, unknown> | undefined
+  skFilter: Record<string, unknown> | undefined,
+  skAttr: string = "sk"
 ): { expression: string; values: Record<string, unknown> } | null => {
   if (!skFilter || Object.keys(skFilter).length === 0) {
     return null;
@@ -54,7 +55,7 @@ const buildSKCondition = (
     const startSK = buildSKValue(skFields, start);
     const endSK = buildSKValue(skFields, end);
     return {
-      expression: "sk BETWEEN :skStart AND :skEnd",
+      expression: `${skAttr} BETWEEN :skStart AND :skEnd`,
       values: { ":skStart": startSK, ":skEnd": endSK },
     };
   }
@@ -81,25 +82,25 @@ const buildSKCondition = (
   const allFieldsProvided = lastFieldIndex === skFields.length - 1 && operatorType === null;
 
   if (allFieldsProvided) {
-    return { expression: "sk = :sk", values: { ":sk": skValue } };
+    return { expression: `${skAttr} = :sk`, values: { ":sk": skValue } };
   }
 
   if (operatorType !== null) {
     switch (operatorType) {
       case "beginsWith":
-        return { expression: "begins_with(sk, :sk)", values: { ":sk": skValue } };
+        return { expression: `begins_with(${skAttr}, :sk)`, values: { ":sk": skValue } };
       case "gte":
-        return { expression: "sk >= :sk", values: { ":sk": skValue } };
+        return { expression: `${skAttr} >= :sk`, values: { ":sk": skValue } };
       case "lte":
-        return { expression: "sk <= :sk", values: { ":sk": skValue } };
+        return { expression: `${skAttr} <= :sk`, values: { ":sk": skValue } };
       case "gt":
-        return { expression: "sk > :sk", values: { ":sk": skValue } };
+        return { expression: `${skAttr} > :sk`, values: { ":sk": skValue } };
       case "lt":
-        return { expression: "sk < :sk", values: { ":sk": skValue } };
+        return { expression: `${skAttr} < :sk`, values: { ":sk": skValue } };
     }
   }
 
-  return { expression: "begins_with(sk, :sk)", values: { ":sk": skValue + "#" } };
+  return { expression: `begins_with(${skAttr}, :sk)`, values: { ":sk": skValue + "#" } };
 };
 
 const FILTER_OPERATORS = ["beginsWith", "gte", "lte", "gt", "lt", "between"] as const;
@@ -258,17 +259,21 @@ export const buildQueryForKey = <T>(
   pkValue: Record<string, unknown>,
   skFilter?: Record<string, unknown>
 ): Query<T> => {
-  const pk = buildPK(config.typeName, pkFields, pkValue);
-  const skCondition = buildSKCondition(skFields, skFilter);
+  // Determine the correct key attribute names based on index
+  const pkAttr = indexName ? `${indexName}_pk` : "pk";
+  const skAttr = indexName ? `${indexName}_sk` : "sk";
 
-  let expression = "pk = :pk";
+  const pk = buildPK(config.typeName, pkFields, pkValue);
+  const skCondition = buildSKCondition(skFields, skFilter, skAttr);
+
+  let expression = `${pkAttr} = :pk`;
   const values: Record<string, unknown> = { ":pk": pk };
 
   if (skCondition) {
     expression += " AND " + skCondition.expression;
     Object.assign(values, skCondition.values);
   } else if (skFields.length === 0) {
-    expression += " AND sk = :sk";
+    expression += ` AND ${skAttr} = :sk`;
     values[":sk"] = config.typeName;
   }
 

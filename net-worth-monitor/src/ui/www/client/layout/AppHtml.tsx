@@ -1,14 +1,14 @@
 declare const __BUILD_ID__: string;
 
-export type SpaHtmlProps = {
+export type AppHtmlProps = {
   title?: string;
   description?: string;
 };
 
-export const SpaHtml = ({
+export const AppHtml = ({
   title = "Net Worth Monitor",
   description = "Track and monitor your net worth",
-}: SpaHtmlProps) => {
+}: AppHtmlProps) => {
   // Build ID from esbuild define (set at build time)
   const buildId = typeof __BUILD_ID__ !== "undefined" ? __BUILD_ID__ : "";
 
@@ -19,7 +19,7 @@ export const SpaHtml = ({
   // In dev mode, Vite serves JS with HMR; in prod, load from static path
   const cssFile = buildId ? `/static/app.${buildId}.css` : "/static/app.css";
   const jsFile = isDevMode
-    ? "http://localhost:5174/src/ui/app/client/index.tsx"
+    ? "http://localhost:5174/src/ui/app/index.tsx"
     : buildId
       ? `/static/app.${buildId}.js`
       : "/static/app.js"; // TODO this needs to be different for SPA

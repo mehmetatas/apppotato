@@ -20,7 +20,6 @@ interface LambdaConfig {
 const lambdas: LambdaConfig[] = [
   { entry: "src/api", outdir: "dist/api", forbiddenDeps: ["preact", "preact-render-to-string"] },
   { entry: "src/ui/www/server", outdir: "dist/www" },
-  { entry: "src/ui/app/server", outdir: "dist/app" },
 ];
 
 const sharedConfig: esbuild.BuildOptions = {
@@ -45,14 +44,12 @@ const ssrDefines = {
 
 const buildLambda = async ({ entry, outdir }: LambdaConfig) => {
   // Support both .ts and .tsx lambda files
-  const tsFile = path.join(rootDir, entry, "lambda.ts");
-  const tsxFile = path.join(rootDir, entry, "lambda.tsx");
-  const entryFile = fs.existsSync(tsFile) ? path.join(entry, "lambda.ts") : path.join(entry, "lambda.tsx");
+  const entryFile = path.join(entry, "lambda.ts");
   const outFile = path.join(outdir, "index.js");
 
   console.log(`  ${entryFile} → ${outFile}`);
 
-  // Both www and app need BUILD_ID for static asset references
+  // www needs BUILD_ID for static asset references
   const needsBuildId = entry.startsWith("src/ui/");
 
   await esbuild.build({
@@ -75,7 +72,7 @@ interface ClientConfig {
 
 const clients: ClientConfig[] = [
   { name: "www", entry: "src/ui/www/client/index.tsx", cssEntry: "src/ui/www/client/app.css" },
-  { name: "app", entry: "src/ui/app/client/index.tsx", cssEntry: "src/ui/app/client/app.css" },
+  { name: "app", entry: "src/ui/app/index.tsx", cssEntry: "src/ui/app/app.css" },
 ];
 
 const buildClient = async ({ name, entry, cssEntry }: ClientConfig) => {
@@ -99,6 +96,11 @@ const buildClient = async ({ name, entry, cssEntry }: ClientConfig) => {
     jsx: "automatic",
     jsxImportSource: "preact",
     external: ["*.css"],
+    alias: {
+      react: "preact/compat",
+      "react-dom": "preact/compat",
+      "react-dom/client": "preact/compat",
+    },
     define: {
       "process.env.NODE_ENV": JSON.stringify(isDevBuild ? "development" : "production"),
       "import.meta.env.DEV": isDevBuild ? "true" : "false",

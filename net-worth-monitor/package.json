@@ -46,10 +46,13 @@
     "@broccoliapps/frontend": "*",
     "@broccoliapps/shared": "*",
     "@hono/valibot-validator": "^0.6.1",
+    "chart.js": "^4.5.1",
     "hono": "^4.11.3",
+    "lucide-preact": "^0.562.0",
     "preact": "^10.28.2",
     "preact-render-to-string": "^6.6.5",
     "preact-router": "^4.1.2",
+    "react-chartjs-2": "^5.3.1",
     "valibot": "^1.2.0"
   }
 }

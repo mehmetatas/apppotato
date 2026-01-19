@@ -5,7 +5,7 @@ import { log } from "../log";
 import { getAuthConfig } from "./config";
 import { jwt, JwtData } from "./jwt";
 
-export type AuthTokens = { accessToken: string; refreshToken: string };
+export type AuthTokens = { accessToken: string; refreshToken: string, user: JwtData };
 
 const exchange = async (authCode: string): Promise<AuthTokens> => {
   const { appId } = getAuthConfig();
@@ -32,7 +32,7 @@ const exchange = async (authCode: string): Promise<AuthTokens> => {
   const accessToken = await createAccessToken(data);
   const refreshToken = await createRefreshToken(data.userId);
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, user: data };
 };
 
 const verifyAuthCode = (app: AppId, encrypted: string) => {
@@ -44,32 +44,34 @@ const verifyAuthCode = (app: AppId, encrypted: string) => {
   }
 };
 
-const refresh = async (jwtData: JwtData, refreshToken: string): Promise<AuthTokens | undefined> => {
+const refresh = async (refreshToken: string, dataProvider: (userId: string) => Promise<JwtData>): Promise<AuthTokens | undefined> => {
   const hash = crypto.sha256(refreshToken);
   const token = await tokens.get({ hash });
-  if (!token || token.expiresAt < epoch.millis() || token.userId !== jwtData.userId) {
+  if (!token || token.expiresAt < epoch.millis()) {
     return undefined;
   }
 
+  const user = await dataProvider(token.userId);
+
   // if refresh token completed 80% of its life time refresh it too
   if ((token.expiresAt - epoch.millis()) / getAuthConfig().refreshTokenLifetime.toMilliseconds() > 0.8) {
-    [refreshToken] = await Promise.all([createRefreshToken(jwtData.userId), tokens.delete({ hash })]);
+    [refreshToken] = await Promise.all([createRefreshToken(user.userId), tokens.delete({ hash })]);
   }
 
-  const accessToken = await createAccessToken(jwtData);
+  const accessToken = await createAccessToken(user);
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, user };
 };
 
-const verifyAccessToken = async (accessToken: string) => {
+const verifyAccessToken = async (accessToken: string): Promise<JwtData | undefined> => {
   const decoded = jwt.verify(accessToken);
   if (!decoded) {
-    return false;
+    return undefined;
   }
   if (decoded.exp < epoch.seconds()) {
-    return false;
+    return undefined;
   }
-  return true;
+  return decoded.data;
 };
 
 const createAccessToken = (data: JwtData) => {

@@ -1,6 +1,5 @@
 import { serve } from "@broccoliapps/dev-tools";
 import { api } from "../../src/api/lambda";
-import { app } from "../../src/ui/app/server/lambda";
 import { www } from "../../src/ui/www/server/lambda";
 
 serve({
@@ -8,6 +7,5 @@ serve({
   routes: {
     "/api/*": api,
     "*": www,
-    "/app/*": app,
   },
 });
