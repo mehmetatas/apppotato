@@ -4,6 +4,7 @@ import { useState } from "preact/hooks";
 import type { UpdateFrequency } from "../../../db/accounts";
 import type { AuthUser } from "../../../shared/api-contracts";
 import { postAccount, putAccountBuckets } from "../../../shared/api-contracts";
+import { getCurrentMonth, shouldShowMonth } from "../utils/dateUtils";
 import { BucketPicker } from "./BucketPicker";
 import { Button } from "./Button";
 import { CurrencyPicker } from "./CurrencyPicker";
@@ -13,13 +14,6 @@ import { Input } from "./Input";
 import { MoneyInput } from "./MoneyInput";
 import { TypeToggle } from "./TypeToggle";
 import { ValueChart } from "./ValueChart";
-
-const getCurrentMonth = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-};
 
 type NewAccountFormProps = {
   onSuccess?: () => void;
@@ -44,21 +38,6 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
 
   const handleHistoryChange = (month: string, value: number | undefined) => {
     setHistory((prev) => ({ ...prev, [month]: value }));
-  };
-
-  const shouldShowMonth = (monthStr: string, frequency: UpdateFrequency): boolean => {
-    if (frequency === "monthly") return true;
-    const month = parseInt(monthStr.split("-")[1] ?? "01", 10);
-    switch (frequency) {
-      case "quarterly":
-        return [1, 4, 7, 10].includes(month);
-      case "biannually":
-        return [1, 7].includes(month);
-      case "yearly":
-        return month === 1;
-      default:
-        return true;
-    }
   };
 
   const handleFrequencyChange = (newFrequency: UpdateFrequency) => {

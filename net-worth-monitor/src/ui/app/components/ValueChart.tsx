@@ -12,6 +12,9 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { getCurrencySymbol } from "../currency";
+import { formatMonthLabel } from "../utils/dateUtils";
+import { fillToCurrentMonth } from "../utils/historyUtils";
+import { NoDataPlaceholder } from "./NoDataPlaceholder";
 
 ChartJS.register(
   CategoryScale,
@@ -28,14 +31,6 @@ type ValueChartProps = {
   data: Record<string, number | undefined>;
   variant?: "default" | "negative";
   currency?: string;
-};
-
-const formatMonthLabel = (key: string): string => {
-  const parts = key.split("-");
-  const year = parts[0] ?? "2000";
-  const month = parts[1] ?? "01";
-  const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 };
 
 const formatCompactNumber = (value: number, currencySymbol: string): string => {
@@ -84,38 +79,15 @@ const createGradient = (
 
 export const ValueChart = ({ data, variant = "default", currency = "USD" }: ValueChartProps) => {
   const currencySymbol = getCurrencySymbol(currency);
-  // Filter to only entries with defined values and sort by date
-  const entries = Object.entries(data)
+  // Fill gaps to current month, then filter to only entries with defined values and sort by date
+  const filledData = fillToCurrentMonth(data);
+  const entries = Object.entries(filledData)
     .filter((entry): entry is [string, number] => entry[1] !== undefined)
     .sort(([a], [b]) => a.localeCompare(b));
 
   // No data points - show empty state with subtle chart background
   if (entries.length === 0) {
-    return (
-      <div class="h-64 mb-6 bg-white dark:bg-black rounded-lg p-3 flex items-center justify-center relative overflow-hidden">
-        <svg
-          class="absolute inset-0 w-full h-full opacity-[0.07] dark:opacity-[0.1]"
-          viewBox="0 0 400 200"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M0,150 Q50,140 80,120 T160,100 T240,80 T320,90 T400,60"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-            class="text-neutral-400"
-          />
-          <path
-            d="M0,150 Q50,140 80,120 T160,100 T240,80 T320,90 T400,60 L400,200 L0,200 Z"
-            fill="currentColor"
-            class="text-neutral-400"
-          />
-        </svg>
-        <span class="text-4xl font-bold text-neutral-200 dark:text-neutral-700 select-none relative z-10">
-          No data
-        </span>
-      </div>
-    );
+    return <NoDataPlaceholder />;
   }
 
   let labels: string[];

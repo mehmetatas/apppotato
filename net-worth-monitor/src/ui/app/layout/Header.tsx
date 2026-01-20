@@ -1,24 +1,15 @@
 import { cache } from "@broccoliapps/browser";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import type { AuthUser } from "../../../shared/api-contracts";
+import { useClickOutside } from "../hooks";
 
 export const Header = () => {
   const user = cache.get<AuthUser>("user");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    if (dropdownOpen) {
-      document.addEventListener("click", handleClickOutside);
-    }
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, [dropdownOpen]);
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
 
   return (
     <header class="py-4 px-4 bg-white/50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-700">

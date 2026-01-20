@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import type { UpdateFrequency } from "../../../db/accounts";
+import { useClickOutside } from "../hooks";
+import { DropdownButton } from "./DropdownButton";
 
 type FrequencyPickerProps = {
   value: UpdateFrequency;
@@ -17,15 +19,8 @@ export const FrequencyPicker = ({ value, onChange }: FrequencyPickerProps) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const closeDropdown = useCallback(() => setOpen(false), []);
+  useClickOutside(containerRef, closeDropdown, open);
 
   const selectedLabel = FREQUENCY_OPTIONS.find((opt) => opt.value === value)?.label || "Monthly";
 
@@ -36,16 +31,7 @@ export const FrequencyPicker = ({ value, onChange }: FrequencyPickerProps) => {
 
   return (
     <div ref={containerRef} class="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        class="w-full h-10 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-colors"
-      >
-        <span class="text-neutral-900 dark:text-neutral-100">{selectedLabel}</span>
-        <svg class="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      <DropdownButton onClick={() => setOpen(!open)} value={selectedLabel} />
 
       {open && (
         <div class="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">

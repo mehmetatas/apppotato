@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useClickOutside } from "../hooks";
+import { DropdownButton } from "./DropdownButton";
 
 type CurrencyPickerProps = {
   value: string;
@@ -27,15 +29,8 @@ export const CurrencyPicker = ({ value, onChange, placeholder = "Select currency
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const closeDropdown = useCallback(() => setOpen(false), []);
+  useClickOutside(containerRef, closeDropdown, open);
 
   const filteredCurrencies = currencies.filter((c) =>
     c.toLowerCase().includes(search.toLowerCase())
@@ -54,19 +49,12 @@ export const CurrencyPicker = ({ value, onChange, placeholder = "Select currency
 
   return (
     <div ref={containerRef} class="relative">
-      <button
-        type="button"
+      <DropdownButton
         onClick={() => setOpen(!open)}
-        disabled={loading}
-        class="w-full h-10 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-colors disabled:opacity-50"
-      >
-        <span class={value ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-400 dark:text-neutral-500"}>
-          {loading ? "Loading..." : value || placeholder}
-        </span>
-        <svg class="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+        loading={loading}
+        value={value}
+        placeholder={placeholder}
+      />
 
       {open && (
         <div class="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">

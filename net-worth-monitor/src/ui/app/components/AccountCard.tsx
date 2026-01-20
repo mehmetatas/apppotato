@@ -1,19 +1,11 @@
 import { ChevronRight, CreditCard, TrendingUp } from "lucide-preact";
 import type { Account } from "../../../db/accounts";
+import { formatCurrency } from "../currency";
 
 type AccountCardProps = {
   account: Account;
   latestValue?: number;
   onClick: () => void;
-};
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 };
 
 export const AccountCard = ({ account, latestValue, onClick }: AccountCardProps) => {
@@ -35,7 +27,7 @@ export const AccountCard = ({ account, latestValue, onClick }: AccountCardProps)
           </span>
           {latestValue !== undefined && (
             <span class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 shrink-0">
-              {formatCurrency(latestValue)}
+              {formatCurrency(latestValue, account.currency)}
             </span>
           )}
         </div>
