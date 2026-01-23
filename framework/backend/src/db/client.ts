@@ -153,7 +153,9 @@ export interface BatchGetParams {
 }
 
 export const executeBatchGet = async <T>(params: BatchGetParams): Promise<DdbItem<T>[]> => {
-  if (params.keys.length === 0) {
+  const keys = uniqueByKey(params.keys);
+
+  if (keys.length === 0) {
     return [];
   }
 
@@ -161,7 +163,7 @@ export const executeBatchGet = async <T>(params: BatchGetParams): Promise<DdbIte
     new BatchGetCommand({
       RequestItems: {
         [params.tableName]: {
-          Keys: params.keys.map((key) => ({ pk: key.pk, sk: key.sk })),
+          Keys: keys.map((key) => ({ pk: key.pk, sk: key.sk })),
         },
       },
     })
@@ -176,13 +178,15 @@ export interface BatchPutParams<T> {
 }
 
 export const executeBatchPut = async <T>(params: BatchPutParams<T>): Promise<void> => {
-  if (params.items.length === 0) {
+  const items = uniqueByKey(params.items);
+
+  if (items.length === 0) {
     return;
   }
 
   const batchSize = 25; // DynamoDB limit for batch writes
-  for (let i = 0; i < params.items.length; i += batchSize) {
-    const batch = params.items.slice(i, i + batchSize);
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
     await docClient.send(
       new BatchWriteCommand({
         RequestItems: {
@@ -201,13 +205,19 @@ export interface BatchDeleteParams {
 }
 
 export const executeBatchDelete = async (params: BatchDeleteParams): Promise<void> => {
-  if (params.keys.length === 0) {
+  console.log("Deleting: " + params.keys.length);
+  console.log("Deleting: " + params.keys.slice(0, 10).map(c => JSON.stringify(c)));
+  const keys = uniqueByKey(params.keys);
+  console.log("Deleting: " + keys.length);
+
+  if (keys.length === 0) {
     return;
   }
 
   const batchSize = 25; // DynamoDB limit for batch writes
-  for (let i = 0; i < params.keys.length; i += batchSize) {
-    const batch = params.keys.slice(i, i + batchSize);
+  for (let i = 0; i < keys.length; i += batchSize) {
+    const batch = keys.slice(i, i + batchSize);
+    console.log("Deleting: " + batch.length);
     await docClient.send(
       new BatchWriteCommand({
         RequestItems: {
@@ -218,4 +228,16 @@ export const executeBatchDelete = async (params: BatchDeleteParams): Promise<voi
       })
     );
   }
+};
+
+const uniqueByKey = (items: { pk: string; sk: string }[]): { pk: string; sk: string }[] => {
+  const unique = new Set<string>();
+  return items.filter(({ pk, sk }) => {
+    const pkSk = `${pk}:${sk}`;
+    if (unique.has(pkSk)) {
+      return false;
+    }
+    unique.add(pkSk);
+    return true;
+  });
 };

@@ -15,8 +15,8 @@ export const serve = (options: ServeOptions): void => {
 
   // Sort routes: specific patterns first, catch-all "*" last
   const sortedRoutes = Object.entries(options.routes).sort(([a], [b]) => {
-    if (a === "*") return 1;
-    if (b === "*") return -1;
+    if (a === "*") {return 1;}
+    if (b === "*") {return -1;}
     return b.length - a.length; // longer patterns first
   });
 

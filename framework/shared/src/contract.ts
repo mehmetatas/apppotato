@@ -53,6 +53,9 @@ const sha256 = async (message: string): Promise<string> => {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
+// Response schema type alias for cleaner signatures
+export type ResponseSchema<TRes> = v.BaseSchema<unknown, TRes, v.BaseIssue<unknown>>;
+
 // API contract with invoke method
 export class ApiContract<TReq extends Record<string, unknown>, TRes> {
   readonly _response!: TRes; // phantom type for type inference
@@ -60,7 +63,8 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
   constructor(
     public readonly method: HttpMethod,
     public readonly path: string,
-    public readonly schema: Schema<TReq>
+    public readonly schema: Schema<TReq>,
+    public readonly responseSchema?: ResponseSchema<TRes>
   ) { }
 
   /**
@@ -135,14 +139,18 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
   }
 }
 
-// Builder: after .withRequest() - IS a contract (defaults to void), can add .withResponse<T>()
+// Builder: after .withRequest() - IS a contract (defaults to void), can add .withResponse()
 export class ContractWithRequest<TReq extends Record<string, unknown>> extends ApiContract<TReq, void> {
-  withResponse<TRes>(): ApiContract<TReq, TRes> {
-    return new ApiContract<TReq, TRes>(this.method, this.path, this.schema);
+  withResponse<TEntries extends v.ObjectEntries>(
+    entries: TEntries
+  ): ApiContract<TReq, v.InferOutput<v.ObjectSchema<TEntries, undefined>>> {
+    const responseSchema = v.object(entries);
+    type TRes = v.InferOutput<typeof responseSchema>;
+    return new ApiContract<TReq, TRes>(this.method, this.path, this.schema, responseSchema);
   }
 }
 
-// Builder: initial state - IS a contract (defaults to void), can add .withRequest() or .withResponse<T>()
+// Builder: initial state - IS a contract (defaults to void), can add .withRequest() or .withResponse()
 export class ContractBuilder extends ApiContract<EmptyRequest, void> {
   constructor(method: HttpMethod, path: string) {
     super(method, path, emptySchema);
@@ -155,8 +163,12 @@ export class ContractBuilder extends ApiContract<EmptyRequest, void> {
     return new ContractWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>>(this.method, this.path, schema);
   }
 
-  withResponse<TRes>(): ApiContract<EmptyRequest, TRes> {
-    return new ApiContract<EmptyRequest, TRes>(this.method, this.path, emptySchema);
+  withResponse<TRes extends v.ObjectEntries>(
+    entries: TRes
+  ): ApiContract<EmptyRequest, v.InferOutput<v.ObjectSchema<TRes, undefined>>> {
+    const responseSchema = v.object(entries);
+    type TResponse = v.InferOutput<typeof responseSchema>;
+    return new ApiContract<EmptyRequest, TResponse>(this.method, this.path, emptySchema, responseSchema);
   }
 }
 

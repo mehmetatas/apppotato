@@ -1,4 +1,4 @@
-import type { UpdateFrequency } from "../../../db/accounts";
+import type { UpdateFrequency } from "../../../shared/api-contracts/dto";
 
 /**
  * Get the current month in YYYY-MM format
@@ -60,7 +60,7 @@ export const generateMonthRangeAscending = (startMonth: string, endMonth: string
  * Check if a month should be shown based on update frequency
  */
 export const shouldShowMonth = (monthStr: string, frequency?: UpdateFrequency): boolean => {
-  if (!frequency || frequency === "monthly") return true;
+  if (!frequency || frequency === "monthly") {return true;}
 
   const month = parseInt(monthStr.split("-")[1] ?? "01", 10);
 

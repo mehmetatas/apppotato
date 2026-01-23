@@ -17,6 +17,7 @@ import {
   aws_route53_targets as route53targets,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
+  aws_scheduler as scheduler,
 } from "aws-cdk-lib";
 import fs from "fs";
 
@@ -72,6 +73,11 @@ export type SigninConfig = {
   };
 };
 
+export type ScheduledJobConfig = {
+  schedule: string;  // EventBridge schedule expression: "rate(6 hours)" or "cron(0 3 ? * SUN *)"
+  payload: string;  // JSON stringified payload
+};
+
 class AppBuilder {
   private stack!: cdk.Stack;
 
@@ -82,6 +88,10 @@ class AppBuilder {
   private s3Origins: S3OriginDef[] = [];
   private cloudfrontFnPath?: string;
   private signinConfig?: SigninConfig;
+  private scheduledJobs?: {
+    distPath: string;
+    jobs: Record<string, ScheduledJobConfig>;
+  };
 
   constructor(
     private readonly appName: string,
@@ -191,13 +201,18 @@ class AppBuilder {
 
   // Derive resource name from path pattern: "/api/*" -> "api", "/*" -> "default"
   private nameFromPath(pathPattern: string): string {
-    if (pathPattern === "/*") return "default";
+    if (pathPattern === "/*") {return "default";}
     const match = pathPattern.match(/^\/([^/*]+)/);
     return match?.[1] ?? "origin";
   }
 
   public withSignIn(config: SigninConfig) {
     this.signinConfig = config;
+    return this;
+  }
+
+  public withScheduledJobs(distPath: string, jobs: Record<string, ScheduledJobConfig>) {
+    this.scheduledJobs = { distPath, jobs };
     return this;
   }
 
@@ -467,6 +482,50 @@ class AppBuilder {
     }
   }
 
+  private configureScheduledJobs(table?: dynamodb.Table) {
+    if (!this.scheduledJobs) {
+      return;
+    }
+
+    const { distPath, jobs } = this.scheduledJobs;
+
+    // Create single Lambda for all jobs
+    const jobsLambda = this.configureLambda(
+      "jobs",
+      { path: distPath },
+      { table }
+    );
+
+    // Create IAM role for Scheduler to invoke Lambda
+    const schedulerRole = new iam.Role(this.stack, this.resourceName("scheduler-role"), {
+      roleName: this.resourceName("scheduler-role"),
+      assumedBy: new iam.ServicePrincipal("scheduler.amazonaws.com"),
+    });
+    jobsLambda.grantInvoke(schedulerRole);
+
+    // Create Schedule for each job
+    for (const [jobName, config] of Object.entries(jobs)) {
+      // Build event payload: { job: "name" } or { job: "name", payload: {...} }
+      const parsedPayload = config.payload ? JSON.parse(config.payload) : null;
+      const eventPayload = parsedPayload && Object.keys(parsedPayload).length > 0
+        ? { job: jobName, payload: parsedPayload }
+        : { job: jobName };
+
+      new scheduler.CfnSchedule(this.stack, this.resourceName(`job-${jobName}`), {
+        name: this.resourceName(`job-${jobName}`),
+        scheduleExpression: config.schedule,
+        scheduleExpressionTimezone: "UTC",
+        flexibleTimeWindow: { mode: "OFF" },
+        state: "ENABLED",
+        target: {
+          arn: jobsLambda.functionArn,
+          roleArn: schedulerRole.roleArn,
+          input: JSON.stringify(eventPayload),
+        },
+      });
+    }
+  }
+
   private async configureCognito(): Promise<{ userPoolId: string; userPoolClientId: string }> {
     if (!this.signinConfig) {
       throw new Error("SigninConfig is required for Cognito");
@@ -638,9 +697,9 @@ class AppBuilder {
       cognitoConfig = await this.configureCognito();
     }
 
-    // Create table if we have any lambda origins
+    // Create table if we have any lambda origins or scheduled jobs
     let table: dynamodb.Table | undefined;
-    if (this.lambdaOrigins.length > 0) {
+    if (this.lambdaOrigins.length > 0 || this.scheduledJobs) {
       table = this.configureDdb();
     }
 
@@ -674,6 +733,9 @@ class AppBuilder {
     if (distribution) {
       this.configureRoute53(distribution);
     }
+
+    // Configure scheduled jobs (EventBridge)
+    this.configureScheduledJobs(table);
 
     app.synth();
   }

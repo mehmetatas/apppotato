@@ -1,5 +1,5 @@
-import type { Account } from "../../../db/accounts";
-import { generateMonthRangeAscending, getCurrentMonth, getNextMonth } from "./dateUtils";
+import type { AccountDto } from "../../../shared/api-contracts/dto";
+import { generateMonthRangeAscending, getCurrentMonth } from "./dateUtils";
 
 type HistoryItem = { month: string; value: number };
 
@@ -71,9 +71,12 @@ export const fillToCurrentMonth = (
 /**
  * Calculate net worth by month with carry-forward logic
  * Returns a Record<string, number> where keys are months and values are net worth
+ *
+ * For active accounts: carry forward the last known value to current month
+ * For archived accounts: only use actual history data, no carry forward (drops to 0 after last entry)
  */
 export const calculateNetWorth = (
-  accounts: Account[],
+  accounts: AccountDto[],
   accountHistories: Record<string, Record<string, number>>
 ): Record<string, number> => {
   const currentMonth = getCurrentMonth();
@@ -94,6 +97,20 @@ export const calculateNetWorth = (
   // Generate all months from earliest to current
   const sortedMonths = generateMonthRangeAscending(earliestMonth, currentMonth);
 
+  // For archived accounts, find their last month with data
+  const lastMonthWithData: Record<string, string> = {};
+  for (const account of accounts) {
+    if (account.archivedAt) {
+      const history = accountHistories[account.id];
+      if (history) {
+        const months = Object.keys(history).sort((a, b) => b.localeCompare(a));
+        if (months.length > 0) {
+          lastMonthWithData[account.id] = months[0]!;
+        }
+      }
+    }
+  }
+
   // Calculate net worth by month with carry-forward
   const netWorthByMonth: Record<string, number> = {};
   const lastKnownValue: Record<string, number> = {};
@@ -102,10 +119,24 @@ export const calculateNetWorth = (
     let total = 0;
     for (const account of accounts) {
       const history = accountHistories[account.id];
+      const isArchived = !!account.archivedAt;
+
       if (history && history[month] !== undefined) {
         lastKnownValue[account.id] = history[month];
       }
-      const value = lastKnownValue[account.id] ?? 0;
+
+      // For archived accounts, don't carry forward past their last data point
+      let value = 0;
+      if (isArchived) {
+        const lastMonth = lastMonthWithData[account.id];
+        if (lastMonth && month <= lastMonth) {
+          value = lastKnownValue[account.id] ?? 0;
+        }
+        // else: month is after last data point, value stays 0
+      } else {
+        value = lastKnownValue[account.id] ?? 0;
+      }
+
       if (account.type === "asset") {
         total += value;
       } else {

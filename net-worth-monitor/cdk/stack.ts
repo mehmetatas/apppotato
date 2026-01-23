@@ -14,7 +14,14 @@ await app("networthmonitor")
   .in(AWS_ACCOUNT_ID, AWS_REGION)
   .env("prod")
   .withDomain(DOMAIN, ["www", ""], SSL_CERT_ARN)
+  .withCloudFrontFn(path.join(__dirname, "cloudfront-fn.js"))
   .withLambdaOrigin("/*", path.join(__dirname, "../dist/www")) // SSR (default)
   .withLambdaOrigin("/api/*", path.join(__dirname, "../dist/api")) // API
   .withS3Origin("/static/*", path.join(__dirname, "../dist/static")) // Static assets
+  .withScheduledJobs(path.join(__dirname, "../dist/jobs"), {
+    "exchange-rate": {
+      schedule: "rate(6 hour)",
+      payload: JSON.stringify({})
+    }
+  })
   .build();

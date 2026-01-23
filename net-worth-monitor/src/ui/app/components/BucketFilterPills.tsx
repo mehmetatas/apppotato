@@ -1,9 +1,9 @@
 import { Check } from "lucide-preact";
 import { useCallback, useRef } from "preact/hooks";
-import type { Bucket } from "../../../db/buckets";
+import type { BucketDto } from "../../../shared/api-contracts/dto";
 
 type BucketFilterPillsProps = {
-  buckets: Bucket[];
+  buckets: BucketDto[];
   selectedBucketId: string | null;
   onSelect: (bucketId: string | null) => void;
 };

@@ -1,6 +1,6 @@
 import { api } from "@broccoliapps/shared";
+import { getHealthResponse } from "./health.dto";
 
-export const getHealth = api("GET", "/health").withResponse<{
-  status: string;
-  timestamp: string;
-}>();
+// GET /health - health check
+export const getHealth = api("GET", "/health")
+  .withResponse(getHealthResponse);

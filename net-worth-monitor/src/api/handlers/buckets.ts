@@ -24,14 +24,14 @@ api.register(getBucketAccounts, async (req, res, ctx) => {
   const accountIds = bucket.accountIds ?? [];
 
   if (accountIds.length === 0) {
-    return res.ok([]);
+    return res.ok({ accounts: [] });
   }
 
   // Fetch all accounts for the user and filter by accountIds
   const allAccounts = await accounts.query({ userId }).all();
   const filteredAccounts = allAccounts.filter((account) => accountIds.includes(account.id));
 
-  return res.ok(filteredAccounts);
+  return res.ok({ accounts: filteredAccounts });
 });
 
 // PUT /buckets/:id/accounts - set accounts for a bucket
@@ -56,30 +56,28 @@ api.register(putBucketAccounts, async (req, res, ctx) => {
     accountIds: req.accountIds,
   });
 
-  // Update each added account's bucketIds (add this bucket)
-  for (const accountId of addedAccountIds) {
-    const account = await accounts.get({ userId }, { id: accountId });
-    if (account) {
-      const bucketIds = account.bucketIds ?? [];
-      if (!bucketIds.includes(req.id)) {
-        await accounts.put({
-          ...account,
-          bucketIds: [...bucketIds, req.id],
-        });
-      }
-    }
-  }
+  // Batch fetch and update all affected accounts
+  const allAffectedAccountIds = [...addedAccountIds, ...removedAccountIds];
+  if (allAffectedAccountIds.length > 0) {
+    const affectedAccounts = await accounts.batchGet(
+      allAffectedAccountIds.map((id) => ({ pk: { userId }, sk: { id } }))
+    );
 
-  // Update each removed account's bucketIds (remove this bucket)
-  for (const accountId of removedAccountIds) {
-    const account = await accounts.get({ userId }, { id: accountId });
-    if (account) {
+    const updatedAccounts = affectedAccounts.map((account) => {
       const bucketIds = account.bucketIds ?? [];
-      await accounts.put({
-        ...account,
-        bucketIds: bucketIds.filter((id) => id !== req.id),
-      });
-    }
+      if (addedAccountIds.includes(account.id)) {
+        // Add this bucket to the account
+        if (!bucketIds.includes(req.id)) {
+          return { ...account, bucketIds: [...bucketIds, req.id] };
+        }
+      } else {
+        // Remove this bucket from the account
+        return { ...account, bucketIds: bucketIds.filter((id) => id !== req.id) };
+      }
+      return account;
+    });
+
+    await accounts.batchPut(updatedAccounts);
   }
 
   return res.noContent();
@@ -89,7 +87,7 @@ api.register(putBucketAccounts, async (req, res, ctx) => {
 api.register(getBuckets, async (_, res, ctx) => {
   const { userId } = await ctx.getUser();
   const result = await buckets.query({ userId }).all();
-  return res.ok(result);
+  return res.ok({ buckets: result });
 });
 
 // POST /buckets - create bucket
@@ -104,7 +102,7 @@ api.register(postBucket, async (req, res, ctx) => {
     createdAt: Date.now(),
   });
 
-  return res.ok(bucket);
+  return res.ok({ bucket });
 });
 
 // PATCH /buckets/:id - update bucket
@@ -121,7 +119,7 @@ api.register(patchBucket, async (req, res, ctx) => {
     name: req.name,
   });
 
-  return res.ok(updated);
+  return res.ok({ bucket: updated });
 });
 
 // DELETE /buckets/:id - delete bucket and update all associated accounts
@@ -135,14 +133,18 @@ api.register(deleteBucket, async (req, res, ctx) => {
 
   // Remove this bucket ID from all associated accounts' bucketIds
   const accountIds = bucket.accountIds ?? [];
-  for (const accountId of accountIds) {
-    const account = await accounts.get({ userId }, { id: accountId });
-    if (account) {
-      const bucketIds = account.bucketIds ?? [];
-      await accounts.put({
-        ...account,
-        bucketIds: bucketIds.filter((id) => id !== req.id),
-      });
+  if (accountIds.length > 0) {
+    const associatedAccounts = await accounts.batchGet(
+      accountIds.map((id) => ({ pk: { userId }, sk: { id } }))
+    );
+
+    const updatedAccounts = associatedAccounts.map((account) => ({
+      ...account,
+      bucketIds: (account.bucketIds ?? []).filter((id) => id !== req.id),
+    }));
+
+    if (updatedAccounts.length > 0) {
+      await accounts.batchPut(updatedAccounts);
     }
   }
 

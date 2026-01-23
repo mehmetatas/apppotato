@@ -1,6 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import type { Account } from "../../../db/accounts";
-import type { Bucket } from "../../../db/buckets";
+import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
 import {
   deleteBucket,
   getAccounts,
@@ -9,13 +8,13 @@ import {
   patchBucket,
   postBucket,
   putBucketAccounts,
-} from "../../../shared/api-contracts";
+} from "../api";
 import { AddBucketForm, BucketListItem, ConfirmActionModal, EmptyState, PageHeader } from "../components";
 import { useModal } from "../hooks";
 
 export const BucketsPage = () => {
-  const [buckets, setBuckets] = useState<Bucket[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [buckets, setBuckets] = useState<BucketDto[]>([]);
+  const [accounts, setAccounts] = useState<AccountDto[]>([]);
   const [accountsByBucket, setAccountsByBucket] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,7 @@ export const BucketsPage = () => {
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(new Set());
 
   // Delete modal
-  const deleteModal = useModal<Bucket>();
+  const deleteModal = useModal<BucketDto>();
   const [deleting, setDeleting] = useState(false);
 
   // Saving account associations
@@ -43,18 +42,18 @@ export const BucketsPage = () => {
     const fetchData = async () => {
       try {
         const [bucketsResult, accountsResult] = await Promise.all([
-          getBuckets.invoke(),
-          getAccounts.invoke(),
+          getBuckets(),
+          getAccounts(),
         ]);
-        setBuckets(bucketsResult);
-        setAccounts(accountsResult);
+        setBuckets(bucketsResult.buckets);
+        setAccounts(accountsResult.accounts);
 
         // Fetch accounts for each bucket
         const accountsMap: Record<string, string[]> = {};
         await Promise.all(
-          bucketsResult.map(async (bucket) => {
-            const bucketAccounts = await getBucketAccounts.invoke({ id: bucket.id });
-            accountsMap[bucket.id] = bucketAccounts.map((a) => a.id);
+          bucketsResult.buckets.map(async (bucket) => {
+            const bucketAccounts = await getBucketAccounts(bucket.id);
+            accountsMap[bucket.id] = bucketAccounts.accounts.map((a) => a.id);
           })
         );
         setAccountsByBucket(accountsMap);
@@ -68,11 +67,11 @@ export const BucketsPage = () => {
   }, []);
 
   const handleCreateBucket = async () => {
-    if (!newBucketName.trim()) return;
+    if (!newBucketName.trim()) {return;}
 
     setCreatingBucket(true);
     try {
-      const bucket = await postBucket.invoke({ name: newBucketName.trim() });
+      const { bucket } = await postBucket({ name: newBucketName.trim() });
       setBuckets((prev) => [...prev, bucket]);
       setAccountsByBucket((prev) => ({ ...prev, [bucket.id]: [] }));
       setNewBucketName("");
@@ -83,7 +82,7 @@ export const BucketsPage = () => {
     }
   };
 
-  const handleStartEdit = (bucket: Bucket) => {
+  const handleStartEdit = (bucket: BucketDto) => {
     setEditingBucketId(bucket.id);
     setEditedName(bucket.name);
   };
@@ -94,11 +93,11 @@ export const BucketsPage = () => {
   };
 
   const handleSaveName = async (bucketId: string) => {
-    if (!editedName.trim()) return;
+    if (!editedName.trim()) {return;}
 
     setSavingName(true);
     try {
-      const updated = await patchBucket.invoke({ id: bucketId, name: editedName.trim() });
+      const { bucket: updated } = await patchBucket({ id: bucketId, name: editedName.trim() });
       setBuckets((prev) => prev.map((b) => (b.id === bucketId ? updated : b)));
       setEditingBucketId(null);
       setEditedName("");
@@ -110,11 +109,11 @@ export const BucketsPage = () => {
   };
 
   const handleDeleteBucket = async () => {
-    if (!deleteModal.data) return;
+    if (!deleteModal.data) {return;}
 
     setDeleting(true);
     try {
-      await deleteBucket.invoke({ id: deleteModal.data.id });
+      await deleteBucket({ id: deleteModal.data.id });
       setBuckets((prev) => prev.filter((b) => b.id !== deleteModal.data!.id));
       setAccountsByBucket((prev) => {
         const updated = { ...prev };
@@ -156,7 +155,7 @@ export const BucketsPage = () => {
 
     setSavingAccounts((prev) => ({ ...prev, [bucketId]: true }));
     try {
-      await putBucketAccounts.invoke({ id: bucketId, accountIds: newAccountIds });
+      await putBucketAccounts(bucketId, newAccountIds);
     } catch (err) {
       // Revert on error
       setAccountsByBucket((prev) => ({

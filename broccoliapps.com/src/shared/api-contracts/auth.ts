@@ -1,10 +1,7 @@
-import { JwtData } from "@broccoliapps/backend/dist/auth/jwt";
-import { api, globalConfig } from "@broccoliapps/shared";
-import * as v from "valibot";
+import { api } from "@broccoliapps/shared";
+import { verifyAuthTokenRequest, verifyAuthTokenResponse } from "./auth.dto";
 
+// POST /v1/auth/verify - verify auth token
 export const verifyAuthToken = api("POST", "/v1/auth/verify")
-  .withRequest({
-    app: v.pipe(v.string(), v.picklist(Object.keys(globalConfig.apps))),
-    code: v.pipe(v.string(), v.maxLength(1024)),
-  })
-  .withResponse<JwtData>();
+  .withRequest(verifyAuthTokenRequest)
+  .withResponse(verifyAuthTokenResponse);

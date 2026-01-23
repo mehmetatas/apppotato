@@ -1,11 +1,11 @@
 import { api } from "@broccoliapps/shared";
-import * as v from "valibot";
-import type { User } from "../../db/users";
+import { getUserResponse, patchUserRequest, patchUserResponse } from "./users.dto";
 
-export const getUser = api("GET", "/user").withResponse<User>();
+// GET /user - get current user
+export const getUser = api("GET", "/user")
+  .withResponse(getUserResponse);
 
+// PATCH /user - update current user
 export const patchUser = api("PATCH", "/user")
-  .withRequest({
-    targetCurrency: v.optional(v.pipe(v.string(), v.length(3))),
-  })
-  .withResponse<User>();
+  .withRequest(patchUserRequest)
+  .withResponse(patchUserResponse);

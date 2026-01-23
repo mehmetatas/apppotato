@@ -20,19 +20,19 @@ const exchange = async (authCode: string): Promise<AuthTokens> => {
     body,
   });
 
-  console.log(resp.status);
-
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new ApiError(resp.status ?? 500, err.message ?? "Unable to exchange auth token", err.details);
   }
 
-  const data = (await resp.json()) as JwtData;
+  const { user } = (await resp.json()) as { user: JwtData };
 
-  const accessToken = await createAccessToken(data);
-  const refreshToken = await createRefreshToken(data.userId);
+  log.dbg("Auth exchange response", user);
 
-  return { accessToken, refreshToken, user: data };
+  const accessToken = await createAccessToken(user);
+  const refreshToken = await createRefreshToken(user.userId);
+
+  return { accessToken, refreshToken, user };
 };
 
 const verifyAuthCode = (app: AppId, encrypted: string) => {

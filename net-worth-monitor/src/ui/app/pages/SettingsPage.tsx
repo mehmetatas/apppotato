@@ -1,12 +1,12 @@
 import { cache } from "@broccoliapps/browser";
 import { useState } from "preact/hooks";
-import type { AuthUser } from "../../../shared/api-contracts";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import { patchUser } from "../../../shared/api-contracts";
 import { PageHeader, TargetCurrencySettings, ThemeSettings } from "../components";
 import { type Theme, getStoredTheme } from "../utils/themeUtils";
 
 export const SettingsPage = () => {
-  const user = cache.get<AuthUser>("user");
+  const user = cache.get<AuthUserDto>("user");
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [currency, setCurrency] = useState(user?.targetCurrency || "USD");
   const [saving, setSaving] = useState(false);
@@ -17,7 +17,7 @@ export const SettingsPage = () => {
     setSaving(true);
     setSaved(false);
     try {
-      const updatedUser = await patchUser.invoke({ targetCurrency: newCurrency });
+      const { user: updatedUser } = await patchUser.invoke({ targetCurrency: newCurrency });
       cache.set("user", { ...user, targetCurrency: updatedUser.targetCurrency });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

@@ -4,7 +4,7 @@ export type Theme = "system" | "light" | "dark";
  * Get the stored theme from localStorage
  */
 export const getStoredTheme = (): Theme => {
-  if (typeof localStorage === "undefined") return "system";
+  if (typeof localStorage === "undefined") {return "system";}
   return (localStorage.getItem("theme") as Theme) || "system";
 };
 

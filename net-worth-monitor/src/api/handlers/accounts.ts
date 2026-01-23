@@ -6,6 +6,7 @@ import {
   deleteAccount,
   getAccount,
   getAccountBuckets,
+  getAccountDetail,
   getAccountHistory,
   getAccounts,
   patchAccount,
@@ -14,6 +15,38 @@ import {
   putAccountHistory,
 } from "../../shared/api-contracts";
 import { api } from "../lambda";
+
+// GET /accounts/:id/detail - get account with all related data (register most specific routes first)
+api.register(getAccountDetail, async (req, res, ctx) => {
+  const { userId } = await ctx.getUser();
+  const account = await accounts.get({ userId }, { id: req.id });
+
+  if (!account) {
+    throw new HttpError(404, "Account not found");
+  }
+
+  // Fetch history items and all buckets in parallel
+  const [items, allBuckets] = await Promise.all([
+    historyItems.query({ userId, accountId: req.id }).all(),
+    buckets.query({ userId }).all(),
+  ]);
+
+  // Convert history items to Record<string, number> map
+  const history: Record<string, number> = {};
+  for (const item of items) {
+    history[item.month] = item.value;
+  }
+
+  // Filter allBuckets to get accountBuckets
+  const bucketIds = account.bucketIds ?? [];
+  const accountBuckets = allBuckets.filter((bucket) => bucketIds.includes(bucket.id));
+
+  return res.ok({
+    account: { ...account, history },
+    accountBuckets,
+    allBuckets,
+  });
+});
 
 // GET /accounts/:id/history - get history items (register most specific routes first)
 api.register(getAccountHistory, async (req, res, ctx) => {
@@ -25,7 +58,14 @@ api.register(getAccountHistory, async (req, res, ctx) => {
   }
 
   const items = await historyItems.query({ userId, accountId: req.id }).all();
-  return res.ok(items);
+
+  // Convert to Record<string, number>
+  const history: Record<string, number> = {};
+  for (const item of items) {
+    history[item.month] = item.value;
+  }
+
+  return res.ok({ history });
 });
 
 // PUT /accounts/:id/history - bulk update history items
@@ -39,7 +79,7 @@ api.register(putAccountHistory, async (req, res, ctx) => {
 
   // Get existing items to find which ones to delete
   const existingItems = await historyItems.query({ userId, accountId: req.id }).all();
-  const newMonths = new Set(req.items.map((item) => item.month));
+  const newMonths = new Set(Object.keys(req.history));
 
   // Delete items that are no longer in the list
   const itemsToDelete = existingItems.filter((item) => !newMonths.has(item.month));
@@ -52,19 +92,19 @@ api.register(putAccountHistory, async (req, res, ctx) => {
     );
   }
 
-  // Create/update history items
-  const items = req.items.map((item) => ({
+  // Create/update history items from Record
+  const items = Object.entries(req.history).map(([month, value]) => ({
     userId,
     accountId: req.id,
-    month: item.month,
-    value: item.value,
+    month,
+    value,
   }));
 
   if (items.length > 0) {
     await historyItems.batchPut(items);
   }
 
-  return res.ok(items);
+  return res.ok({ history: req.history });
 });
 
 // GET /accounts/:id/buckets - get buckets for an account
@@ -79,14 +119,14 @@ api.register(getAccountBuckets, async (req, res, ctx) => {
   const bucketIds = account.bucketIds ?? [];
 
   if (bucketIds.length === 0) {
-    return res.ok([]);
+    return res.ok({ buckets: [] });
   }
 
   // Fetch all buckets for the user and filter by bucketIds
   const allBuckets = await buckets.query({ userId }).all();
   const filteredBuckets = allBuckets.filter((bucket) => bucketIds.includes(bucket.id));
 
-  return res.ok(filteredBuckets);
+  return res.ok({ buckets: filteredBuckets });
 });
 
 // PUT /accounts/:id/buckets - set buckets for an account
@@ -111,30 +151,28 @@ api.register(putAccountBuckets, async (req, res, ctx) => {
     bucketIds: req.bucketIds,
   });
 
-  // Update each added bucket's accountIds (add this account)
-  for (const bucketId of addedBucketIds) {
-    const bucket = await buckets.get({ userId }, { id: bucketId });
-    if (bucket) {
-      const accountIds = bucket.accountIds ?? [];
-      if (!accountIds.includes(req.id)) {
-        await buckets.put({
-          ...bucket,
-          accountIds: [...accountIds, req.id],
-        });
-      }
-    }
-  }
+  // Batch fetch and update all affected buckets
+  const allAffectedBucketIds = [...addedBucketIds, ...removedBucketIds];
+  if (allAffectedBucketIds.length > 0) {
+    const affectedBuckets = await buckets.batchGet(
+      allAffectedBucketIds.map((id) => ({ pk: { userId }, sk: { id } }))
+    );
 
-  // Update each removed bucket's accountIds (remove this account)
-  for (const bucketId of removedBucketIds) {
-    const bucket = await buckets.get({ userId }, { id: bucketId });
-    if (bucket) {
+    const updatedBuckets = affectedBuckets.map((bucket) => {
       const accountIds = bucket.accountIds ?? [];
-      await buckets.put({
-        ...bucket,
-        accountIds: accountIds.filter((id) => id !== req.id),
-      });
-    }
+      if (addedBucketIds.includes(bucket.id)) {
+        // Add this account to the bucket
+        if (!accountIds.includes(req.id)) {
+          return { ...bucket, accountIds: [...accountIds, req.id] };
+        }
+      } else {
+        // Remove this account from the bucket
+        return { ...bucket, accountIds: accountIds.filter((id) => id !== req.id) };
+      }
+      return bucket;
+    });
+
+    await buckets.batchPut(updatedBuckets);
   }
 
   return res.noContent();
@@ -149,7 +187,7 @@ api.register(getAccount, async (req, res, ctx) => {
     throw new HttpError(404, "Account not found");
   }
 
-  return res.ok(account);
+  return res.ok({ account });
 });
 
 // PATCH /accounts/:id - update account
@@ -167,17 +205,17 @@ api.register(patchAccount, async (req, res, ctx) => {
     updatedAccount.name = req.name;
   }
 
-  if (req.closedAt !== undefined) {
-    if (req.closedAt === null) {
-      delete updatedAccount.closedAt;
+  if (req.archivedAt !== undefined) {
+    if (req.archivedAt === null) {
+      delete updatedAccount.archivedAt;
     } else {
-      updatedAccount.closedAt = req.closedAt;
+      updatedAccount.archivedAt = req.archivedAt;
     }
   }
 
   const updated = await accounts.put(updatedAccount);
 
-  return res.ok(updated);
+  return res.ok({ account: updated });
 });
 
 // DELETE /accounts/:id - delete account and all history
@@ -202,14 +240,18 @@ api.register(deleteAccount, async (req, res, ctx) => {
 
   // Remove this account ID from all associated buckets' accountIds
   const bucketIds = account.bucketIds ?? [];
-  for (const bucketId of bucketIds) {
-    const bucket = await buckets.get({ userId }, { id: bucketId });
-    if (bucket) {
-      const accountIds = bucket.accountIds ?? [];
-      await buckets.put({
-        ...bucket,
-        accountIds: accountIds.filter((id) => id !== req.id),
-      });
+  if (bucketIds.length > 0) {
+    const associatedBuckets = await buckets.batchGet(
+      bucketIds.map((id) => ({ pk: { userId }, sk: { id } }))
+    );
+
+    const updatedBuckets = associatedBuckets.map((bucket) => ({
+      ...bucket,
+      accountIds: (bucket.accountIds ?? []).filter((id) => id !== req.id),
+    }));
+
+    if (updatedBuckets.length > 0) {
+      await buckets.batchPut(updatedBuckets);
     }
   }
 
@@ -232,21 +274,21 @@ api.register(postAccount, async (req, res, ctx) => {
     ...(req.updateFrequency && { updateFrequency: req.updateFrequency }),
   });
 
-  // Create history items
-  const items = req.historyItems.map((item) => ({
+  // Create history items from Record
+  const items = Object.entries(req.history).map(([month, value]) => ({
     userId,
     accountId,
-    month: item.month,
-    value: item.value,
+    month,
+    value,
   }));
   await historyItems.batchPut(items);
 
-  return res.ok(account);
+  return res.ok({ account });
 });
 
 // GET /accounts - list all accounts
 api.register(getAccounts, async (_, res, ctx) => {
   const { userId } = await ctx.getUser();
   const result = await accounts.query({ userId }).all();
-  return res.ok(result);
+  return res.ok({ accounts: result });
 });

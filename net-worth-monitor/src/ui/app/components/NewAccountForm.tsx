@@ -1,9 +1,9 @@
 import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useState } from "preact/hooks";
-import type { UpdateFrequency } from "../../../db/accounts";
-import type { AuthUser } from "../../../shared/api-contracts";
-import { postAccount, putAccountBuckets } from "../../../shared/api-contracts";
+import type { AuthUserDto } from "../../../shared/api-contracts";
+import type { BucketDto, UpdateFrequency } from "../../../shared/api-contracts/dto";
+import { getBuckets, postAccount, putAccountBuckets } from "../api";
 import { getCurrentMonth, shouldShowMonth } from "../utils/dateUtils";
 import { BucketPicker } from "./BucketPicker";
 import { Button } from "./Button";
@@ -18,11 +18,11 @@ import { ValueChart } from "./ValueChart";
 type NewAccountFormProps = {
   onSuccess?: () => void;
   onBack?: () => void;
-  showBucketsPicker?: boolean;
 };
 
-export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: NewAccountFormProps) => {
-  const user = cache.get<AuthUser>("user");
+export const NewAccountForm = ({ onSuccess, onBack }: NewAccountFormProps) => {
+  const user = cache.get<AuthUserDto>("user");
+  const [viewMode, setViewMode] = useState<"quick" | "advanced">("quick");
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState("");
   const [type, setType] = useState<"asset" | "debt">("asset");
@@ -31,10 +31,10 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
   const [currentValue, setCurrentValue] = useState<number | undefined>(undefined);
   const [history, setHistory] = useState<Record<string, number | undefined>>({});
   const [selectedBucketIds, setSelectedBucketIds] = useState<Set<string>>(new Set());
-  const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
+  const [preloadedBuckets, setPreloadedBuckets] = useState<BucketDto[] | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wantHistory, setWantHistory] = useState(false);
+  const [createAnother, setCreateAnother] = useState(false);
 
   const handleHistoryChange = (month: string, value: number | undefined) => {
     setHistory((prev) => ({ ...prev, [month]: value }));
@@ -56,7 +56,7 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
 
   const hasAtLeastOneValue = Object.values(history).some((v) => v !== undefined);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!name.trim()) {
       setError("Please enter a name");
       return;
@@ -69,6 +69,10 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
     // Pre-populate history with current value
     const currentMonth = getCurrentMonth();
     setHistory((prev) => ({ ...prev, [currentMonth]: currentValue }));
+    // Preload buckets for step 3
+    if (!preloadedBuckets) {
+      getBuckets().then((r) => setPreloadedBuckets(r.buckets)).catch(console.error);
+    }
     setStep(2);
   };
 
@@ -86,25 +90,23 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
     setError(null);
 
     const currentMonth = getCurrentMonth();
-    const historyItems = [{ month: currentMonth, value: currentValue }];
 
     try {
-      const account = await postAccount.invoke({
+      await postAccount({
         name: name.trim(),
         type,
         currency,
         updateFrequency,
-        historyItems,
+        history: { [currentMonth]: currentValue },
       });
-      if (showBucketsPicker) {
-        setCreatedAccountId(account.id);
-        setStep(3);
+      if (createAnother) {
+        setName("");
+        setCurrentValue(undefined);
+        setError(null);
+      } else if (onSuccess) {
+        onSuccess();
       } else {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          route("/app");
-        }
+        route("/app");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create");
@@ -123,39 +125,47 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleHistoryNext = () => {
     if (!hasAtLeastOneValue) {
       setError("Please enter at least one value");
       return;
     }
+    setError(null);
+    setStep(3);
+  };
 
+  const handleCreate = async () => {
     setIsSubmitting(true);
     setError(null);
 
-    const historyItems: { month: string; value: number }[] = [];
+    // Filter out undefined values for the API
+    const historyRecord: Record<string, number> = {};
     for (const [month, value] of Object.entries(history)) {
       if (value !== undefined) {
-        historyItems.push({ month, value });
+        historyRecord[month] = value;
       }
     }
 
     try {
-      const account = await postAccount.invoke({
+      const { account } = await postAccount({
         name: name.trim(),
         type,
         currency,
         updateFrequency,
-        historyItems,
+        history: historyRecord,
       });
-      if (showBucketsPicker) {
-        setCreatedAccountId(account.id);
-        setStep(3);
+
+      if (selectedBucketIds.size > 0) {
+        await putAccountBuckets({
+          id: account.id,
+          bucketIds: Array.from(selectedBucketIds),
+        });
+      }
+
+      if (onSuccess) {
+        onSuccess();
       } else {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          route("/app");
-        }
+        route("/app");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create");
@@ -164,47 +174,9 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
     }
   };
 
-  const handleFinish = async () => {
-    if (!createdAccountId) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      if (selectedBucketIds.size > 0) {
-        await putAccountBuckets.invoke({
-          id: createdAccountId,
-          bucketIds: Array.from(selectedBucketIds),
-        });
-      }
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        route("/app");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save buckets");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <div>
-      {(step === 2 || step === 3) && (
-        <button
-          type="button"
-          onClick={handleBack}
-          class="mb-4 flex items-center gap-1 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
-      )}
-
-      {step === 1 && (
+      {viewMode === "quick" && step === 1 && (
         <div class="space-y-6">
           <Input
             label="Name"
@@ -214,6 +186,69 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
           />
 
           <TypeToggle value={type} onChange={setType} />
+
+          <MoneyInput
+            label="Current Value"
+            value={currentValue}
+            onChange={setCurrentValue}
+            currency={currency}
+            placeholder="0"
+          />
+
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={createAnother}
+              onChange={(e) => setCreateAnother((e.target as HTMLInputElement).checked)}
+              class="w-4 h-4 rounded border-neutral-300 dark:border-neutral-600 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm text-neutral-600 dark:text-neutral-400">
+              Create another
+            </span>
+          </label>
+
+          {error && (
+            <p class="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+
+          <Button
+            onClick={handleQuickCreate}
+            disabled={isSubmitting}
+            class="w-full"
+          >
+            {isSubmitting ? "Creating..." : "Add"}
+          </Button>
+
+          <div class="text-center">
+            <button
+              type="button"
+              onClick={() => setViewMode("advanced")}
+              class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            >
+              Advanced options
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewMode === "advanced" && step === 1 && (
+        <div class="space-y-6">
+          <Input
+            label="Name"
+            value={name}
+            onChange={setName}
+            placeholder="e.g., Main Savings"
+          />
+
+          <TypeToggle value={type} onChange={setType} />
+
+          <MoneyInput
+            label="Current Value"
+            value={currentValue}
+            onChange={setCurrentValue}
+            currency={currency}
+            placeholder="0"
+          />
 
           <div class="flex flex-col gap-1.5">
             <label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -235,37 +270,27 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
             </p>
           </div>
 
-          <MoneyInput
-            label="Current Value"
-            value={currentValue}
-            onChange={setCurrentValue}
-            currency={currency}
-            placeholder="0"
-          />
-
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={wantHistory}
-              onChange={(e) => setWantHistory((e.target as HTMLInputElement).checked)}
-              class="w-4 h-4 rounded border-neutral-300 dark:border-neutral-600 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm text-neutral-600 dark:text-neutral-400">
-              I have past monthly values to enter
-            </span>
-          </label>
-
           {error && (
             <p class="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
           <Button
-            onClick={wantHistory ? handleNext : handleQuickCreate}
+            onClick={handleNext}
             disabled={isSubmitting}
             class="w-full"
           >
-            {isSubmitting ? "Creating..." : wantHistory ? "Next" : "Add"}
+            Next
           </Button>
+
+          <div class="text-center">
+            <button
+              type="button"
+              onClick={() => setViewMode("quick")}
+              class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            >
+              Quick create
+            </button>
+          </div>
         </div>
       )}
 
@@ -291,13 +316,22 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
             <p class="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
-          <Button
-            onClick={handleCreateAccount}
-            disabled={isSubmitting || !hasAtLeastOneValue}
-            class="w-full"
-          >
-            {isSubmitting ? "Creating..." : "Next"}
-          </Button>
+          <div class="flex gap-3">
+            <Button
+              onClick={handleBack}
+              variant="secondary"
+              class="flex-1"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleHistoryNext}
+              disabled={!hasAtLeastOneValue}
+              class="flex-1"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 
@@ -312,6 +346,8 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
               onChange={setSelectedBucketIds}
               showHeader={false}
               showManageLink={false}
+              preloadedBuckets={preloadedBuckets}
+              onBucketsChange={setPreloadedBuckets}
             />
           </div>
 
@@ -319,15 +355,26 @@ export const NewAccountForm = ({ onSuccess, onBack, showBucketsPicker = true }: 
             <p class="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
-          <Button
-            onClick={handleFinish}
-            disabled={isSubmitting}
-            class="w-full"
-          >
-            {isSubmitting ? "Saving..." : "Done"}
-          </Button>
+          <div class="flex gap-3">
+            <Button
+              onClick={handleBack}
+              variant="secondary"
+              disabled={isSubmitting}
+              class="flex-1"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={isSubmitting}
+              class="flex-1"
+            >
+              {isSubmitting ? "Creating..." : "Create"}
+            </Button>
+          </div>
         </div>
       )}
+
     </div>
   );
 };

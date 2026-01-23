@@ -1,18 +1,18 @@
 import { ChevronRight, CreditCard, TrendingUp } from "lucide-preact";
-import type { Account } from "../../../db/accounts";
-import { formatCurrency } from "../currency";
+import type { AccountDto } from "../../../shared/api-contracts/dto";
+import { formatCurrency } from "../../../shared/currency";
+import { AppLink } from "../SpaApp";
 
 type AccountCardProps = {
-  account: Account;
+  account: AccountDto;
   latestValue?: number;
-  onClick: () => void;
 };
 
-export const AccountCard = ({ account, latestValue, onClick }: AccountCardProps) => {
+export const AccountCard = ({ account, latestValue }: AccountCardProps) => {
   return (
-    <button
-      onClick={onClick}
-      class="w-full flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors text-left"
+    <AppLink
+      href={`/accounts/${account.id}`}
+      class="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors"
     >
       <div class={`p-3 rounded-lg ${account.type === "asset"
         ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400"
@@ -35,6 +35,6 @@ export const AccountCard = ({ account, latestValue, onClick }: AccountCardProps)
       <div class="text-neutral-400 dark:text-neutral-500">
         <ChevronRight size={20} />
       </div>
-    </button>
+    </AppLink>
   );
 };

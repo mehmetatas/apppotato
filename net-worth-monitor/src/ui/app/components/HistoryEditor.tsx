@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
-import type { UpdateFrequency } from "../../../db/accounts";
+import type { UpdateFrequency } from "../../../shared/api-contracts/dto";
 import {
   formatMonth,
   generateMonthRange,
@@ -70,8 +70,8 @@ export const HistoryEditor = ({
   }, [sortedMonths.length]);
 
   const getMonthStatus = (month: string): "saving" | "saved" | undefined => {
-    if (savingMonths[month]) return "saving";
-    if (savedMonths[month]) return "saved";
+    if (savingMonths[month]) {return "saving";}
+    if (savedMonths[month]) {return "saved";}
     return undefined;
   };
 

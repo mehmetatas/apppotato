@@ -20,6 +20,7 @@ interface LambdaConfig {
 const lambdas: LambdaConfig[] = [
   { entry: "src/api", outdir: "dist/api", forbiddenDeps: ["preact", "preact-render-to-string"] },
   { entry: "src/ui/www/server", outdir: "dist/www" },
+  { entry: "src/jobs", outdir: "dist/jobs", forbiddenDeps: ["preact", "preact-render-to-string"] },
 ];
 
 const sharedConfig: esbuild.BuildOptions = {

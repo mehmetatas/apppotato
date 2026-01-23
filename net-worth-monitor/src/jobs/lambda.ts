@@ -1,6 +1,6 @@
 import { updateExchangeRates } from "./exchangeRates";
 
-type JobEvent = { job: string };
+type JobEvent = { job: "exchange-rate" };
 
 export const handler = async (event: JobEvent) => {
   console.log("Job received:", event.job);

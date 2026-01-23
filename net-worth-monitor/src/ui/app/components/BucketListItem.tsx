@@ -1,12 +1,11 @@
 import { ChevronDown, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-preact";
-import type { Account } from "../../../db/accounts";
-import type { Bucket } from "../../../db/buckets";
+import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
 import { AccountTypeSection } from "./AccountTypeSection";
 import { InlineTextEditor } from "./InlineTextEditor";
 
 type BucketListItemProps = {
-  bucket: Bucket;
-  accounts: Account[];
+  bucket: BucketDto;
+  accounts: AccountDto[];
   bucketAccountIds: string[];
   isExpanded: boolean;
   isEditing: boolean;
@@ -42,7 +41,7 @@ export const BucketListItem = ({
   const bucketAccounts = accounts.filter((a) => bucketAccountIds.includes(a.id));
   const assetCount = bucketAccounts.filter((a) => a.type === "asset").length;
   const debtCount = bucketAccounts.filter((a) => a.type === "debt").length;
-  const openAccounts = accounts.filter((a) => !a.closedAt);
+  const openAccounts = accounts.filter((a) => !a.archivedAt);
 
   return (
     <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">

@@ -173,5 +173,9 @@ export const getCurrencySymbol = (currency: string): string => {
 
 export const formatCurrency = (value: number, currency: string): string => {
   const symbol = getCurrencySymbol(currency);
-  return `${symbol}${value.toLocaleString()}`;
+  return `${symbol}${value.toFixed(0)}`;
 };
+
+export const getCurrencies = () => {
+  return Object.keys(currencySymbols);
+}

@@ -7,7 +7,7 @@ type ModalProps = {
 };
 
 export const Modal = ({ open, onClose, children }: ModalProps) => {
-  if (!open) return null;
+  if (!open) {return null;}
 
   return (
     <div

@@ -1,7 +1,7 @@
 import { Check, Loader2, Plus } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
-import type { Bucket } from "../../../db/buckets";
-import { getBuckets, postBucket } from "../../../shared/api-contracts";
+import type { BucketDto } from "../../../shared/api-contracts/dto";
+import { getBuckets, postBucket } from "../api";
 import { AppLink } from "../SpaApp";
 
 type BucketPickerProps = {
@@ -9,6 +9,8 @@ type BucketPickerProps = {
   onChange: (bucketIds: Set<string>) => void;
   showHeader?: boolean;
   showManageLink?: boolean;
+  preloadedBuckets?: BucketDto[];
+  onBucketsChange?: (buckets: BucketDto[]) => void;
 };
 
 export const BucketPicker = ({
@@ -16,17 +18,20 @@ export const BucketPicker = ({
   onChange,
   showHeader = true,
   showManageLink = true,
+  preloadedBuckets,
+  onBucketsChange,
 }: BucketPickerProps) => {
-  const [buckets, setBuckets] = useState<Bucket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [buckets, setBuckets] = useState<BucketDto[]>(preloadedBuckets ?? []);
+  const [loading, setLoading] = useState(!preloadedBuckets);
   const [newBucketName, setNewBucketName] = useState("");
   const [creatingBucket, setCreatingBucket] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (preloadedBuckets) {return;}
     const fetchBuckets = async () => {
       try {
-        const result = await getBuckets.invoke();
+        const { buckets: result } = await getBuckets();
         setBuckets(result);
       } catch (err) {
         console.error("Failed to load buckets:", err);
@@ -35,7 +40,7 @@ export const BucketPicker = ({
       }
     };
     fetchBuckets();
-  }, []);
+  }, [preloadedBuckets]);
 
   const handleToggleBucket = (bucketId: string) => {
     const newBucketIds = new Set(selectedBucketIds);
@@ -48,12 +53,14 @@ export const BucketPicker = ({
   };
 
   const handleCreateBucket = async () => {
-    if (!newBucketName.trim()) return;
+    if (!newBucketName.trim()) {return;}
 
     setCreatingBucket(true);
     try {
-      const bucket = await postBucket.invoke({ name: newBucketName.trim() });
-      setBuckets((prev) => [...prev, bucket]);
+      const { bucket } = await postBucket({ name: newBucketName.trim() });
+      const newBuckets = [...buckets, bucket];
+      setBuckets(newBuckets);
+      onBucketsChange?.(newBuckets);
       // Automatically select the new bucket
       const newBucketIds = new Set(selectedBucketIds);
       newBucketIds.add(bucket.id);
@@ -102,7 +109,7 @@ export const BucketPicker = ({
             .sort((a, b) => {
               const aSelected = selectedBucketIds.has(a.id);
               const bSelected = selectedBucketIds.has(b.id);
-              if (aSelected !== bSelected) return bSelected ? 1 : -1;
+              if (aSelected !== bSelected) {return bSelected ? 1 : -1;}
               return a.name.localeCompare(b.name);
             })
             .map((bucket) => {
@@ -137,7 +144,7 @@ export const BucketPicker = ({
             placeholder="Create new bucket..."
             class="flex-1 px-3 py-2 text-sm bg-neutral-50 dark:bg-neutral-700/50 border border-neutral-200 dark:border-neutral-600 rounded-full text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-neutral-700"
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreateBucket();
+              if (e.key === "Enter") {handleCreateBucket();}
             }}
           />
           <button

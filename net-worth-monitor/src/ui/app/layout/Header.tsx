@@ -1,10 +1,10 @@
 import { cache } from "@broccoliapps/browser";
 import { useCallback, useRef, useState } from "preact/hooks";
-import type { AuthUser } from "../../../shared/api-contracts";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import { useClickOutside } from "../hooks";
 
 export const Header = () => {
-  const user = cache.get<AuthUser>("user");
+  const user = cache.get<AuthUserDto>("user");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,22 +45,16 @@ export const Header = () => {
                     <p class="text-xs text-neutral-500 dark:text-neutral-400">{user.email}</p>
                   </div>
                   <a
-                    href="/app/import"
-                    class="block px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                  >
-                    Import
-                  </a>
-                  <a
                     href="/app/buckets"
                     class="block px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                   >
                     Buckets
                   </a>
                   <a
-                    href="/app/closed-debts"
+                    href="/app/archived"
                     class="block px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                   >
-                    Closed Debts
+                    Archived
                   </a>
                   <a
                     href="/app/settings"

@@ -59,7 +59,7 @@ export interface QueryData {
 export interface Query<T> {
   // Chainable methods
   limit(n: number): Query<T>;
-  cursor(c: string): Query<T>;
+  cursor(c?: string): Query<T>;
   reverse(): Query<T>;
   filter(f: Filter<T>): Query<T>;
 

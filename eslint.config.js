@@ -1,11 +1,15 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
+import unusedImports from "eslint-plugin-unused-imports";
 
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
     files: ["**/*.ts", "**/*.tsx"],
+    plugins: {
+      "unused-imports": unusedImports,
+    },
     rules: {
       // Enforce double quotes
       quotes: ["error", "double", { avoidEscape: true }],
@@ -16,9 +20,13 @@ export default tseslint.config(
       // Require braces for all control statements
       curly: ["error", "all"],
 
-      // No unused variables (use TypeScript version)
+      // Disable base rules (let unused-imports handle it)
       "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": [
+      "@typescript-eslint/no-unused-vars": "off",
+
+      // Auto-remove unused imports
+      "unused-imports/no-unused-imports": "error",
+      "unused-imports/no-unused-vars": [
         "error",
         {
           argsIgnorePattern: "^_",

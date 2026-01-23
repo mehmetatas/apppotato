@@ -1,12 +1,12 @@
 import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useState } from "preact/hooks";
-import type { AuthUser } from "../../../shared/api-contracts";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import { patchUser } from "../../../shared/api-contracts";
 import { Button, CurrencyPicker } from "../components";
 
 export const OnboardingPage = () => {
-  const user = cache.get<AuthUser>("user");
+  const user = cache.get<AuthUserDto>("user");
   const [currency, setCurrency] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,13 +14,13 @@ export const OnboardingPage = () => {
   const firstName = user?.name?.split(" ")[0] || "there";
 
   const handleContinue = async () => {
-    if (!currency) return;
+    if (!currency) {return;}
 
     setSaving(true);
     setError(null);
 
     try {
-      const updatedUser = await patchUser.invoke({ targetCurrency: currency });
+      const { user: updatedUser } = await patchUser.invoke({ targetCurrency: currency });
       cache.set("user", { ...user, targetCurrency: updatedUser.targetCurrency });
       route("/app");
     } catch (err) {

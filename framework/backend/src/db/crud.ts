@@ -70,30 +70,33 @@ export const createDeleteFn = (config: ItemConfig) => {
 };
 
 export const createBatchGetFn = <T>(config: ItemConfig) => {
-  return async (keys: { pk: Record<string, unknown>; sk?: Record<string, unknown> }[]): Promise<T[]> => {
+  const hasPK = config.pk.length > 0;
+  const hasSK = config.sk.length > 0;
+
+  return async (keys: Record<string, unknown>[]): Promise<T[]> => {
     if (keys.length === 0) {
       return [];
     }
 
-    // Build DDB keys and deduplicate
-    const keySet = new Set<string>();
-    const uniqueKeys: { pk: string; sk: string }[] = [];
+    // Build DDB keys
+    const ddbKeys: { pk: string; sk: string }[] = [];
     for (const key of keys) {
-      const pk = buildPK(config.typeName, config.pk, key.pk);
-      const sk = buildSK(config.typeName, config.sk, key.sk ?? {});
-      const keyId = `${pk}:${sk}`;
-      if (!keySet.has(keyId)) {
-        keySet.add(keyId);
-        uniqueKeys.push({ pk, sk });
-      }
+      // For PK+SK tables: key is { pk: {...}, sk: {...} }
+      // For PK-only or SK-only tables: key is flat { field1, field2, ... }
+      const pkValue = hasPK && hasSK ? (key.pk as Record<string, unknown>) : hasPK ? key : {};
+      const skValue = hasPK && hasSK ? ((key.sk as Record<string, unknown>) ?? {}) : hasSK ? key : {};
+
+      const pk = buildPK(config.typeName, config.pk, pkValue);
+      const sk = buildSK(config.typeName, config.sk, skValue);
+      ddbKeys.push({ pk, sk });
     }
 
     // Batch requests (DynamoDB limit is 100)
     const batchSize = 100;
     const resultsMap = new Map<string, T>();
 
-    for (let i = 0; i < uniqueKeys.length; i += batchSize) {
-      const batch = uniqueKeys.slice(i, i + batchSize);
+    for (let i = 0; i < ddbKeys.length; i += batchSize) {
+      const batch = ddbKeys.slice(i, i + batchSize);
       const items = await executeBatchGet<T>({
         tableName: config.tableName,
         keys: batch,
@@ -107,7 +110,7 @@ export const createBatchGetFn = <T>(config: ItemConfig) => {
 
     // Reorder to match input order
     const results: T[] = [];
-    for (const key of uniqueKeys) {
+    for (const key of ddbKeys) {
       const item = resultsMap.get(`${key.pk}:${key.sk}`);
       if (item) {
         results.push(item);
@@ -128,14 +131,26 @@ export const createBatchPutFn = <T>(config: ItemConfig) => {
 };
 
 export const createBatchDeleteFn = (config: ItemConfig) => {
-  return async (keys: { pk: Record<string, unknown>; sk?: Record<string, unknown> }[]): Promise<void> => {
+  const hasPK = config.pk.length > 0;
+  const hasSK = config.sk.length > 0;
+
+  return async (keys: Record<string, unknown>[]): Promise<void> => {
+    console.log("Deleting: " + keys.length);
     if (keys.length === 0) {
       return;
     }
-    const ddbKeys = keys.map((key) => ({
-      pk: buildPK(config.typeName, config.pk, key.pk),
-      sk: buildSK(config.typeName, config.sk, key.sk ?? {}),
-    }));
+    const ddbKeys = keys.map((key) => {
+      // For PK+SK tables: key is { pk: {...}, sk: {...} }
+      // For PK-only or SK-only tables: key is flat { field1, field2, ... }
+      const pkValue = hasPK && hasSK ? (key.pk as Record<string, unknown>) : hasPK ? key : {};
+      const skValue = hasPK && hasSK ? ((key.sk as Record<string, unknown>) ?? {}) : hasSK ? key : {};
+
+      return {
+        pk: buildPK(config.typeName, config.pk, pkValue),
+        sk: buildSK(config.typeName, config.sk, skValue),
+      };
+    });
+    console.log("Deleting: " + ddbKeys.length);
     await executeBatchDelete({ tableName: config.tableName, keys: ddbKeys });
   };
 };

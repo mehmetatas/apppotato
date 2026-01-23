@@ -21,7 +21,7 @@ api.register(verifyAuthToken, async (req, res) => {
     await authCodes.delete(authCode);
 
     const { name, provider, email, userId } = authCode;
-    return res.ok({ name, provider, email, userId });
+    return res.ok({ user: { name, provider, email, userId } });
   } catch (error) {
     log.err("Failed to verify token", { error });
     throw error;

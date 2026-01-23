@@ -1,39 +1,35 @@
+import { Trash2 } from "lucide-preact";
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
-import type { Account, HistoryItem } from "../../../db/accounts";
+import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
+import { getCurrencySymbol } from "../../../shared/currency";
 import {
   deleteAccount,
-  getAccount,
-  getAccountBuckets,
-  getAccountHistory,
+  getAccountDetail,
   patchAccount,
   putAccountBuckets,
   putAccountHistory,
-} from "../../../shared/api-contracts";
+} from "../api";
 import {
   AccountDetailSkeleton,
   AccountHeader,
   BucketPicker,
   ConfirmActionModal,
   HistoryEditor,
-  ImportHistoryModal,
   PageHeader,
+  RemoveAccountModal,
   ValueChart,
 } from "../components";
-import { getCurrencySymbol } from "../currency";
 import { useModal } from "../hooks";
-import { getCurrentMonth } from "../utils/dateUtils";
-import { historyMapToItems } from "../utils/historyUtils";
 
 type AccountDetailPageProps = {
   id?: string;
 };
 
 export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
-  const [account, setAccount] = useState<Account | null>(null);
+  const [account, setAccount] = useState<AccountDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [historyItems, setHistoryItems] = useState<Pick<HistoryItem, "month" | "value">[]>([]);
   const [editedHistory, setEditedHistory] = useState<Record<string, number | undefined>>({});
   const [originalHistory, setOriginalHistory] = useState<Record<string, number>>({});
   const [savingMonths, setSavingMonths] = useState<Record<string, boolean>>({});
@@ -46,38 +42,89 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
 
   // Bucket picker
   const [accountBucketIds, setAccountBucketIds] = useState<Set<string>>(new Set());
+  const [allBuckets, setAllBuckets] = useState<BucketDto[]>([]);
 
-  // Modals
+  // Remove modal (archive or delete) - for non-archived accounts
+  const removeModal = useModal();
+  const [removing, setRemoving] = useState(false);
+
+  // Delete modal - for archived accounts (permanent delete only)
   const deleteModal = useModal();
   const [deleting, setDeleting] = useState(false);
 
-  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [unarchiving, setUnarchiving] = useState(false);
 
-  const closeDebtModal = useModal();
-  const [closing, setClosing] = useState(false);
+  // Helper: Update history state from API response
+  const updateHistoryFromResponse = (
+    history: Record<string, number>,
+    alsoUpdateEdited = false
+  ) => {
+    setOriginalHistory(history);
+    if (alsoUpdateEdited) {
+      setEditedHistory({ ...history });
+    }
+  };
 
-  const reopenDebtModal = useModal();
-  const [reopening, setReopening] = useState(false);
+  // Helper: Show save success indicator for a month
+  const showSaveSuccess = (month: string) => {
+    setSavingMonths((prev) => ({ ...prev, [month]: false }));
+    setSavedMonths((prev) => ({ ...prev, [month]: true }));
+    setTimeout(() => {
+      setSavedMonths((prev) => ({ ...prev, [month]: false }));
+    }, 1000);
+  };
+
+  // Helper: Save history to server
+  const saveHistory = async (
+    historyToSave: Record<string, number | undefined>,
+    options?: { month?: string; alsoUpdateEdited?: boolean }
+  ) => {
+    if (!account) { return; }
+
+    const { month, alsoUpdateEdited } = options ?? {};
+
+    if (month) {
+      setSavingMonths((prev) => ({ ...prev, [month]: true }));
+    }
+
+    try {
+      // Filter out undefined values for the API
+      const historyRecord: Record<string, number> = {};
+      for (const [m, value] of Object.entries(historyToSave)) {
+        if (value !== undefined) {
+          historyRecord[m] = value;
+        }
+      }
+
+      const result = await putAccountHistory({
+        id: account.id,
+        history: historyRecord,
+      });
+      updateHistoryFromResponse(result.history, alsoUpdateEdited);
+      if (month) {
+        showSaveSuccess(month);
+      }
+      return result;
+    } catch (err) {
+      if (month) {
+        setSavingMonths((prev) => ({ ...prev, [month]: false }));
+      }
+      throw err;
+    }
+  };
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) { return; }
 
     const fetchData = async () => {
       try {
-        const [accountResult, historyResult, accountBucketsResult] = await Promise.all([
-          getAccount.invoke({ id }),
-          getAccountHistory.invoke({ id }),
-          getAccountBuckets.invoke({ id }),
-        ]);
-        setAccount(accountResult);
-        setHistoryItems(historyResult);
-        setAccountBucketIds(new Set(accountBucketsResult.map((b) => b.id)));
+        const result = await getAccountDetail(id);
+        setAccount(result.account);
+        setAccountBucketIds(new Set(result.accountBuckets.map((b) => b.id)));
+        setAllBuckets(result.allBuckets);
 
-        // Convert history items to a map for editing
-        const historyMap: Record<string, number> = {};
-        for (const item of historyResult) {
-          historyMap[item.month] = item.value;
-        }
+        // Use embedded history map from account
+        const historyMap = result.account.history ?? {};
         setOriginalHistory(historyMap);
         setEditedHistory({ ...historyMap });
       } catch (err) {
@@ -89,58 +136,91 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     fetchData();
   }, [id]);
 
-  const handleHistoryChange = (month: string, value: number | undefined) => {
+  const handleHistoryChange = async (month: string, value: number | undefined) => {
+    const previousValue = editedHistory[month];
     setEditedHistory((prev) => ({ ...prev, [month]: value }));
+
+    // If deleting an entry that existed in the database, save immediately
+    // (can't rely on blur event since the input is removed from DOM)
+    if (value === undefined && originalHistory[month] !== undefined) {
+      try {
+        const newHistory = { ...editedHistory, [month]: undefined };
+        await saveHistory(newHistory, { month });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete entry");
+        // Revert the deletion on error
+        setEditedHistory((prev) => ({ ...prev, [month]: previousValue }));
+      }
+    }
   };
 
   const handleBlur = async (month: string) => {
-    if (!account) return;
+    if (!account) { return; }
 
     const currentValue = editedHistory[month];
     const originalValue = originalHistory[month];
 
     // Check if value changed
-    if (currentValue === originalValue) return;
-    if (currentValue === undefined && originalValue === undefined) return;
-
-    setSavingMonths((prev) => ({ ...prev, [month]: true }));
+    if (currentValue === originalValue) { return; }
+    if (currentValue === undefined && originalValue === undefined) { return; }
 
     try {
-      const items = historyMapToItems(editedHistory);
-      const updatedItems = await putAccountHistory.invoke({
-        id: account.id,
-        items,
-      });
-
-      // Update original history
-      const historyMap: Record<string, number> = {};
-      for (const item of updatedItems) {
-        historyMap[item.month] = item.value;
-      }
-      setOriginalHistory(historyMap);
-      setHistoryItems(updatedItems);
-
-      // Show saved indicator
-      setSavingMonths((prev) => ({ ...prev, [month]: false }));
-      setSavedMonths((prev) => ({ ...prev, [month]: true }));
-
-      // Hide saved indicator after 3 seconds
-      setTimeout(() => {
-        setSavedMonths((prev) => ({ ...prev, [month]: false }));
-      }, 3000);
+      await saveHistory(editedHistory, { month });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
-      setSavingMonths((prev) => ({ ...prev, [month]: false }));
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!account) { return; }
+
+    setRemoving(true);
+    try {
+      const { account: updated } = await patchAccount({ id: account.id, archivedAt: Date.now() });
+      setAccount(updated);
+      removeModal.close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to archive");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleUnarchive = async () => {
+    if (!account) { return; }
+
+    setUnarchiving(true);
+    try {
+      const { account: updated } = await patchAccount({ id: account.id, archivedAt: null });
+      setAccount(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unarchive");
+    } finally {
+      setUnarchiving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!account) return;
+    if (!account) { return; }
+
+    setRemoving(true);
+    try {
+      await deleteAccount({ id: account.id });
+      route("/app");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+      setRemoving(false);
+      removeModal.close();
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!account) { return; }
 
     setDeleting(true);
     try {
-      await deleteAccount.invoke({ id: account.id });
-      route("/app");
+      await deleteAccount({ id: account.id });
+      route("/app/archived");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete");
       setDeleting(false);
@@ -149,7 +229,7 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
   };
 
   const handleStartEditName = () => {
-    if (!account) return;
+    if (!account) { return; }
     setEditedName(account.name);
     setEditingName(true);
   };
@@ -160,11 +240,11 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
   };
 
   const handleSaveName = async () => {
-    if (!account || !editedName.trim()) return;
+    if (!account || !editedName.trim()) { return; }
 
     setSavingName(true);
     try {
-      const updated = await patchAccount.invoke({ id: account.id, name: editedName.trim() });
+      const { account: updated } = await patchAccount({ id: account.id, name: editedName.trim() });
       setAccount(updated);
       setEditingName(false);
       setEditedName("");
@@ -175,90 +255,14 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     }
   };
 
-  const handleImport = async (items: { month: string; value: number }[]) => {
-    if (!account) return;
-
-    // Merge parsed data with existing history
-    const mergedHistory = { ...editedHistory };
-    for (const item of items) {
-      mergedHistory[item.month] = item.value;
-    }
-
-    const historyItems = historyMapToItems(mergedHistory);
-    const updatedItems = await putAccountHistory.invoke({
-      id: account.id,
-      items: historyItems,
-    });
-
-    // Update state
-    const historyMap: Record<string, number> = {};
-    for (const item of updatedItems) {
-      historyMap[item.month] = item.value;
-    }
-    setOriginalHistory(historyMap);
-    setEditedHistory({ ...historyMap });
-    setHistoryItems(updatedItems);
-  };
-
-  const handleCloseDebt = async () => {
-    if (!account) return;
-
-    setClosing(true);
-    try {
-      const currentMonth = getCurrentMonth();
-
-      // Set current month value to 0
-      const updatedHistory = { ...editedHistory, [currentMonth]: 0 };
-      const items = historyMapToItems(updatedHistory);
-
-      const updatedItems = await putAccountHistory.invoke({
-        id: account.id,
-        items,
-      });
-
-      // Update history state
-      const historyMap: Record<string, number> = {};
-      for (const item of updatedItems) {
-        historyMap[item.month] = item.value;
-      }
-      setOriginalHistory(historyMap);
-      setEditedHistory({ ...historyMap });
-      setHistoryItems(updatedItems);
-
-      // Mark as closed
-      const updated = await patchAccount.invoke({ id: account.id, closedAt: Date.now() });
-      setAccount(updated);
-      closeDebtModal.close();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to close debt");
-    } finally {
-      setClosing(false);
-    }
-  };
-
-  const handleReopenDebt = async () => {
-    if (!account) return;
-
-    setReopening(true);
-    try {
-      const updated = await patchAccount.invoke({ id: account.id, closedAt: null });
-      setAccount(updated);
-      reopenDebtModal.close();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reopen debt");
-    } finally {
-      setReopening(false);
-    }
-  };
-
   const handleBucketsChange = async (newBucketIds: Set<string>) => {
-    if (!account) return;
+    if (!account) { return; }
 
     const previousBucketIds = accountBucketIds;
     setAccountBucketIds(newBucketIds);
 
     try {
-      await putAccountBuckets.invoke({ id: account.id, bucketIds: Array.from(newBucketIds) });
+      await putAccountBuckets({ id: account.id, bucketIds: Array.from(newBucketIds) });
     } catch (err) {
       setAccountBucketIds(previousBucketIds);
       setError(err instanceof Error ? err.message : "Failed to update buckets");
@@ -282,10 +286,7 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     .filter(([, v]) => v !== undefined)
     .sort(([a], [b]) => b.localeCompare(a))[0];
   const latestValue = latestMonth?.[1] ?? 0;
-  const isClosed = !!account.closedAt;
-  const isDebt = account.type === "debt";
-  const canClose = isDebt && !isClosed;
-  const canReopen = isDebt && isClosed;
+  const isArchived = !!account.archivedAt;
 
   return (
     <div>
@@ -311,50 +312,33 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
             </span>
           </div>
 
-          {isClosed && (
-            <div class="mb-4 px-4 py-3 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
-              <p class="text-sm text-green-800 dark:text-green-200">
-                This debt was closed on {new Date(account.closedAt!).toLocaleDateString()}
+          {isArchived && (
+            <div class="mb-4 px-4 py-3 bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between">
+              <p class="text-sm text-amber-800 dark:text-amber-200">
+                Archived on {new Date(account.archivedAt!).toLocaleDateString()}
               </p>
+              <button
+                onClick={handleUnarchive}
+                disabled={unarchiving}
+                class="text-sm text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 font-medium hover:underline disabled:opacity-50"
+              >
+                {unarchiving ? "..." : "Unarchive"}
+              </button>
             </div>
           )}
 
-          <ValueChart
-            data={editedHistory}
-            variant={account.type === "debt" ? "negative" : "default"}
-            currency={account.currency}
-          />
+          <div class="mb-4">
+            <ValueChart
+              data={editedHistory}
+              variant={account.type === "debt" ? "negative" : "default"}
+              currency={account.currency}
+            />
+          </div>
 
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
               Value History
             </h2>
-            <div class="flex items-center gap-3">
-              {canClose && (
-                <button
-                  onClick={() => closeDebtModal.open()}
-                  class="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:underline"
-                >
-                  Close Debt
-                </button>
-              )}
-              {canReopen && (
-                <button
-                  onClick={() => reopenDebtModal.open()}
-                  class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline"
-                >
-                  Reopen Debt
-                </button>
-              )}
-              {!isClosed && (
-                <button
-                  onClick={() => setImportModalOpen(true)}
-                  class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline"
-                >
-                  Import
-                </button>
-              )}
-            </div>
           </div>
 
           <HistoryEditor
@@ -364,7 +348,7 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
             currency={account.currency}
             savingMonths={savingMonths}
             savedMonths={savedMonths}
-            disabled={isClosed}
+            disabled={isArchived}
             updateFrequency={account.updateFrequency}
           />
         </div>
@@ -372,73 +356,57 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
         <BucketPicker
           selectedBucketIds={accountBucketIds}
           onChange={handleBucketsChange}
+          preloadedBuckets={allBuckets}
+          onBucketsChange={setAllBuckets}
         />
 
         <div class="pt-12 text-center">
-          <button
-            onClick={() => deleteModal.open()}
-            class="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm hover:underline"
-          >
-            Delete {account.type === "asset" ? "Asset" : "Debt"}
-          </button>
+          {isArchived ? (
+            <button
+              onClick={() => deleteModal.open()}
+              class="inline-flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm hover:underline"
+            >
+              <Trash2 size={16} />
+              Permanently Delete
+            </button>
+          ) : (
+            <button
+              onClick={() => removeModal.open()}
+              class="inline-flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm hover:underline"
+            >
+              <Trash2 size={16} />
+              Remove {account.type === "asset" ? "Asset" : "Debt"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Delete Modal */}
+      {/* Remove Modal (Archive or Delete) - for non-archived accounts */}
+      <RemoveAccountModal
+        open={removeModal.isOpen}
+        onClose={removeModal.close}
+        onArchive={handleArchive}
+        onDelete={handleDelete}
+        accountType={account.type}
+        loading={removing}
+      />
+
+      {/* Permanent Delete Modal - for archived accounts */}
       <ConfirmActionModal
         open={deleteModal.isOpen}
         onClose={deleteModal.close}
-        onConfirm={handleDelete}
-        title={`Delete ${account.type === "asset" ? "Asset" : "Debt"}`}
+        onConfirm={handlePermanentDelete}
+        title="Permanently Delete"
         confirmText="Delete"
         confirmVariant="danger"
         loading={deleting}
       >
-        {isDebt && (
-          <p class="mb-4">
-            If you've paid off this debt, use "Close Debt" instead to hide it while preserving the history for net worth calculations.
-          </p>
-        )}
         <p class="mb-4">
-          <strong>Warning:</strong> Deleting will remove all value history, which affects your historical net worth calculations.
+          This will permanently erase all records of this {account.type === "asset" ? "asset" : "debt"}, as if it never existed.
         </p>
         <p>
-          Are you sure you want to delete this {account.type === "asset" ? "asset" : "debt"}? This action cannot be undone.
+          Are you sure? This action cannot be undone.
         </p>
-      </ConfirmActionModal>
-
-      {/* Import Modal */}
-      <ImportHistoryModal
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        onImport={handleImport}
-      />
-
-      {/* Close Debt Modal */}
-      <ConfirmActionModal
-        open={closeDebtModal.isOpen}
-        onClose={closeDebtModal.close}
-        onConfirm={handleCloseDebt}
-        title="Close Debt"
-        confirmText="Close Debt"
-        loading={closing}
-      >
-        <p class="mb-4">Congratulations on paying off this debt!</p>
-        <p>
-          This will set the current month's value to $0 and hide this debt from your home page and buckets while preserving all history for net worth calculations. You can reopen it anytime.
-        </p>
-      </ConfirmActionModal>
-
-      {/* Reopen Debt Modal */}
-      <ConfirmActionModal
-        open={reopenDebtModal.isOpen}
-        onClose={reopenDebtModal.close}
-        onConfirm={handleReopenDebt}
-        title="Reopen Debt"
-        confirmText="Reopen Debt"
-        loading={reopening}
-      >
-        <p>This will make the debt visible again on your home page and in buckets.</p>
       </ConfirmActionModal>
     </div>
   );

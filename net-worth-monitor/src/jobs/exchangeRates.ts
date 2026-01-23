@@ -1,4 +1,4 @@
-import { CurrencyRate, currencyRates } from "../db/currencyRates";
+import { ExchangeRate, exchangeRates } from "../db/currencyRates";
 
 type ExchangeRateApiResponse = {
   result: string;
@@ -26,46 +26,53 @@ export async function updateExchangeRates(): Promise<void> {
   const dateStr = `${year}-${month}-${day}`;
   const monthStr = `${year}-${month}`;
 
+  const currencies = Object.keys(data.rates).filter((c) => c !== "USD");
+
   // Check idempotency - skip if rates for this date already exist
-  const existingRate = await currencyRates.get({ date: dateStr, currency: "USD" });
+  const existingRate = await exchangeRates.get({ currency: "GBP" }, { date: dateStr });
   if (existingRate) {
     console.log(`Rates for ${dateStr} already exist, skipping`);
     return;
   }
 
   // Store all daily rates
-  const dailyRates: CurrencyRate[] = Object.entries(data.rates).map(([currency, rate]) => ({
+  const dailyRates: ExchangeRate[] = currencies.map((currency) => ({
     date: dateStr,
     currency,
-    rate,
+    rate: data.rates[currency]!,
   }));
 
-  await currencyRates.batchPut(dailyRates);
+  await exchangeRates.batchPut(dailyRates);
   console.log(`Stored ${dailyRates.length} exchange rates for ${dateStr}`);
 
   // Update running monthly average
-  await updateMonthlyAverage(monthStr);
+  await updateMonthlyAverage(monthStr, currencies);
 
   // When a new month starts, delete previous month's daily data
   const dayOfMonth = updateDate.getUTCDate();
   if (dayOfMonth === 1) {
-    await deletePreviousMonthDailyRates(year, parseInt(month));
+    await deletePreviousMonthDailyRates(year, parseInt(month), currencies);
   }
 }
 
-async function updateMonthlyAverage(monthStr: string): Promise<void> {
+async function updateMonthlyAverage(monthStr: string, currencies: string[]): Promise<void> {
   const monthPrefix = `${monthStr}-`;
 
-  // Query all daily rates for the current month
-  const dailyRates = await currencyRates.query({ date: { beginsWith: monthPrefix } }).all();
-  if (dailyRates.length === 0) {
+  // Query daily rates for each currency (new table has currency as PK)
+  const allDailyRates: ExchangeRate[] = [];
+  for (const currency of currencies) {
+    const rates = await exchangeRates.query({ currency }, { date: { beginsWith: monthPrefix } }).all();
+    allDailyRates.push(...rates);
+  }
+
+  if (allDailyRates.length === 0) {
     console.log(`No daily rates found for ${monthStr}`);
     return;
   }
 
   // Group rates by currency and calculate averages
   const ratesByCurrency: Record<string, number[]> = {};
-  for (const rate of dailyRates) {
+  for (const rate of allDailyRates) {
     if (!ratesByCurrency[rate.currency]) {
       ratesByCurrency[rate.currency] = [];
     }
@@ -73,7 +80,7 @@ async function updateMonthlyAverage(monthStr: string): Promise<void> {
   }
 
   // Create/update monthly average records
-  const monthlyAverages: CurrencyRate[] = Object.entries(ratesByCurrency).map(
+  const monthlyAverages: ExchangeRate[] = Object.entries(ratesByCurrency).map(
     ([currency, rates]) => ({
       date: monthStr,
       currency,
@@ -81,11 +88,11 @@ async function updateMonthlyAverage(monthStr: string): Promise<void> {
     })
   );
 
-  await currencyRates.batchPut(monthlyAverages);
-  console.log(`Updated monthly average for ${monthStr} (${Object.keys(ratesByCurrency).length} currencies, based on ${dailyRates.length / Object.keys(ratesByCurrency).length} days)`);
+  await exchangeRates.batchPut(monthlyAverages);
+  console.log(`Updated monthly average for ${monthStr} (${Object.keys(ratesByCurrency).length} currencies, based on ${allDailyRates.length / Object.keys(ratesByCurrency).length} days)`);
 }
 
-async function deletePreviousMonthDailyRates(currentYear: number, currentMonth: number): Promise<void> {
+async function deletePreviousMonthDailyRates(currentYear: number, currentMonth: number, currencies: string[]): Promise<void> {
   // Calculate previous month
   let prevYear = currentYear;
   let prevMonth = currentMonth - 1;
@@ -96,12 +103,20 @@ async function deletePreviousMonthDailyRates(currentYear: number, currentMonth: 
 
   const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, "0")}-`;
 
-  // Query all daily rates for the previous month
-  const dailyRates = await currencyRates.query({ date: { beginsWith: prevMonthPrefix } }).all();
-  if (dailyRates.length === 0) {
+  // Query daily rates for each currency (new table has currency as PK)
+  const allDailyRates: ExchangeRate[] = [];
+  for (const currency of currencies) {
+    const rates = await exchangeRates.query({ currency }, { date: { beginsWith: prevMonthPrefix } }).all();
+    allDailyRates.push(...rates);
+  }
+
+  if (allDailyRates.length === 0) {
     return;
   }
 
-  await currencyRates.batchDelete(dailyRates);
-  console.log(`Deleted ${dailyRates.length} daily rates for previous month`);
+  // Delete using proper key structure
+  await exchangeRates.batchDelete(
+    allDailyRates.map((r) => ({ pk: { currency: r.currency }, sk: { date: r.date } }))
+  );
+  console.log(`Deleted ${allDailyRates.length} daily rates for previous month`);
 }

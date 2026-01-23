@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "preact/hooks";
-import type { UpdateFrequency } from "../../../db/accounts";
+import type { UpdateFrequency } from "../../../shared/api-contracts/dto";
 import { useClickOutside } from "../hooks";
 import { DropdownButton } from "./DropdownButton";
 

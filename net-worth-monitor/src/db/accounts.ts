@@ -9,7 +9,7 @@ export type Account = {
   type: "asset" | "debt";
   currency: string;
   createdAt: number;
-  closedAt?: number;
+  archivedAt?: number;
   bucketIds?: string[];
   updateFrequency?: UpdateFrequency;
 };

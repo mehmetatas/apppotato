@@ -3,25 +3,50 @@ type CacheValue<T> = {
   expiresAt?: number; // epoch ms
 };
 
-const set = <T>(key: string, value: T, expiresAt?: number): void => {
-  const cacheValue: CacheValue<T> = { value, expiresAt };
-  localStorage.setItem(key, JSON.stringify(cacheValue));
+type StorageType = "local" | "session";
+
+type CacheOptions = {
+  storage?: StorageType;
 };
 
-const get = <T>(key: string): T | null => {
-  const raw = localStorage.getItem(key);
-  if (!raw) return null;
+const getStorage = (storage: StorageType = "local"): Storage => {
+  return storage === "session" ? sessionStorage : localStorage;
+};
+
+const set = <T>(key: string, value: T, expiresAt?: number, options?: CacheOptions): void => {
+  const cacheValue: CacheValue<T> = { value, expiresAt };
+  getStorage(options?.storage).setItem(key, JSON.stringify(cacheValue));
+};
+
+const get = <T>(key: string, options?: CacheOptions): T | null => {
+  const storage = getStorage(options?.storage);
+  const raw = storage.getItem(key);
+  if (!raw) {return null;}
 
   const cacheValue: CacheValue<T> = JSON.parse(raw);
   if (cacheValue.expiresAt && Date.now() > cacheValue.expiresAt) {
-    localStorage.removeItem(key);
+    storage.removeItem(key);
     return null;
   }
   return cacheValue.value;
 };
 
-const remove = (key: string): void => {
-  localStorage.removeItem(key);
+const remove = (key: string, options?: CacheOptions): void => {
+  getStorage(options?.storage).removeItem(key);
 };
 
-export const cache = { set, get, remove };
+const removeByPrefix = (prefix: string, options?: CacheOptions): void => {
+  const storage = getStorage(options?.storage);
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key && key.startsWith(prefix)) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) {
+    storage.removeItem(key);
+  }
+};
+
+export const cache = { set, get, remove, removeByPrefix };

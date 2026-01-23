@@ -1,41 +1,39 @@
 import { api } from "@broccoliapps/shared";
-import * as v from "valibot";
-import type { Bucket } from "../../db/buckets";
-import type { Account } from "../../db/accounts";
+import {
+  deleteBucketRequest,
+  getBucketAccountsRequest,
+  getBucketAccountsResponse,
+  getBucketsResponse,
+  patchBucketRequest,
+  patchBucketResponse,
+  postBucketRequest,
+  postBucketResponse,
+  putBucketAccountsRequest,
+} from "./buckets.dto";
 
 // GET /buckets - list all buckets
-export const getBuckets = api("GET", "/buckets").withResponse<Bucket[]>();
+export const getBuckets = api("GET", "/buckets")
+  .withResponse(getBucketsResponse);
 
 // POST /buckets - create bucket
 export const postBucket = api("POST", "/buckets")
-  .withRequest({
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
-  })
-  .withResponse<Bucket>();
+  .withRequest(postBucketRequest)
+  .withResponse(postBucketResponse);
 
 // PATCH /buckets/:id - update bucket
 export const patchBucket = api("PATCH", "/buckets/:id")
-  .withRequest({
-    id: v.string(),
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
-  })
-  .withResponse<Bucket>();
+  .withRequest(patchBucketRequest)
+  .withResponse(patchBucketResponse);
 
 // DELETE /buckets/:id - delete bucket
-export const deleteBucket = api("DELETE", "/buckets/:id").withRequest({
-  id: v.string(),
-});
+export const deleteBucket = api("DELETE", "/buckets/:id")
+  .withRequest(deleteBucketRequest);
 
 // GET /buckets/:id/accounts - get accounts in a bucket
 export const getBucketAccounts = api("GET", "/buckets/:id/accounts")
-  .withRequest({
-    id: v.string(),
-  })
-  .withResponse<Account[]>();
+  .withRequest(getBucketAccountsRequest)
+  .withResponse(getBucketAccountsResponse);
 
 // PUT /buckets/:id/accounts - set accounts for a bucket
 export const putBucketAccounts = api("PUT", "/buckets/:id/accounts")
-  .withRequest({
-    id: v.string(),
-    accountIds: v.array(v.string()),
-  });
+  .withRequest(putBucketAccountsRequest);

@@ -1,9 +1,9 @@
 import { Check } from "lucide-preact";
-import type { Account } from "../../../db/accounts";
+import type { AccountDto } from "../../../shared/api-contracts/dto";
 
 type AccountTypeSectionProps = {
   title: string;
-  accounts: Account[];
+  accounts: AccountDto[];
   selectedAccountIds: string[];
   onToggleAccount: (accountId: string) => void;
   selectedColor: string;
@@ -16,12 +16,12 @@ export const AccountTypeSection = ({
   onToggleAccount,
   selectedColor,
 }: AccountTypeSectionProps) => {
-  if (accounts.length === 0) return null;
+  if (accounts.length === 0) {return null;}
 
   const sortedAccounts = [...accounts].sort((a, b) => {
     const aSelected = selectedAccountIds.includes(a.id);
     const bSelected = selectedAccountIds.includes(b.id);
-    if (aSelected !== bSelected) return bSelected ? 1 : -1;
+    if (aSelected !== bSelected) {return bSelected ? 1 : -1;}
     return a.name.localeCompare(b.name);
   });
 

@@ -1,11 +1,11 @@
-import { auth, HttpError } from "@broccoliapps/backend";
-import { Duration } from "@broccoliapps/shared";
+import { auth, HttpError, log } from "@broccoliapps/backend";
+import { Duration, globalConfig } from "@broccoliapps/shared";
 import { users } from "../../db/users";
-import { type AuthUser, authExchange, refreshToken } from "../../shared/api-contracts";
+import { authExchange, refreshToken, type AuthUserDto } from "../../shared/api-contracts";
 import { api } from "../lambda";
 
-const accessTokenLifetime = Duration.days(1);
-const refreshTokenLifetime = Duration.years(1);
+const accessTokenLifetime = globalConfig.isProd ? Duration.days(1) : Duration.minutes(5);
+const refreshTokenLifetime = globalConfig.isProd ? Duration.years(1) : Duration.hours(1);
 
 auth.setConfig({
   appId: "networthmonitor",
@@ -16,10 +16,14 @@ auth.setConfig({
 api.register(authExchange, async (req, res) => {
   const { accessToken, refreshToken, user: jwtUser } = await auth.exchange(req.code);
 
+  log.dbg("JWT user", jwtUser);
+
   // Check if user exists by email
   const existingUsers = await users.query.byEmail({ email: jwtUser.email }).all();
   let existingUser = existingUsers[0];
   let isNewUser = false;
+
+  log.dbg("Existing user", existingUser);
 
   if (!existingUser) {
     // Create new user
@@ -36,13 +40,15 @@ api.register(authExchange, async (req, res) => {
     });
   }
 
-  const authUser: AuthUser = {
+  const authUser: AuthUserDto = {
     id: existingUser.id,
     email: existingUser.email,
     name: existingUser.name,
     isNewUser,
     targetCurrency: existingUser.targetCurrency || null,
   };
+
+  log.dbg("Auth user", authUser);
 
   return res.ok({
     accessToken,

@@ -10,7 +10,7 @@ const AuthCard = ({ onClose }: { onClose?: () => void }) => {
   };
 
   const handleEmailSignIn = () => {
-    if (!email) return;
+    if (!email) {return;}
     window.location.href = `${globalConfig.apps["broccoliapps-com"].baseUrl}/auth?app=networthmonitor&provider=email&email=${encodeURIComponent(email)}`;
   };
 

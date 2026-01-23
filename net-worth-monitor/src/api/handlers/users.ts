@@ -12,7 +12,7 @@ api.register(getUser, async (_, res, ctx) => {
     throw new HttpError(404, "User not found");
   }
 
-  return res.ok(user);
+  return res.ok({ user });
 });
 
 // PATCH /user - update user profile
@@ -30,5 +30,5 @@ api.register(patchUser, async (req, res, ctx) => {
     updatedAt: Date.now(),
   });
 
-  return res.ok(updated);
+  return res.ok({ user: updated });
 });

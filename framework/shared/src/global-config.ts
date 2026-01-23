@@ -1,6 +1,8 @@
 const isDev = typeof window === "undefined" ? !process.env.LAMBDA_TASK_ROOT : window.location.hostname === "localhost";
 
 export const globalConfig = {
+  isDev,
+  isProd: !isDev,
   apps: {
     networthmonitor: {
       baseUrl: isDev ? "http://localhost:8081" : "https://www.networthmonitor.com",

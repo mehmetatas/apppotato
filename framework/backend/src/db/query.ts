@@ -14,7 +14,7 @@ const OPERATORS = ["beginsWith", "gte", "lte", "gt", "lt"] as const;
 type OperatorName = (typeof OPERATORS)[number];
 
 const isOperator = (value: unknown): value is Record<OperatorName, unknown> => {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null) {return false;}
   const keys = Object.keys(value);
   return keys.length === 1 && OPERATORS.includes(keys[0] as OperatorName);
 };
@@ -28,7 +28,7 @@ const getOperator = (value: Record<OperatorName, unknown>): { op: OperatorName; 
 const buildSKValue = (skFields: string[], skValue: Record<string, unknown>): string => {
   let sk = "";
   for (const field of skFields) {
-    if (skValue[field] === undefined) break;
+    if (skValue[field] === undefined) {break;}
     const value = skValue[field];
     if (isOperator(value)) {
       const { val } = getOperator(value);
@@ -66,7 +66,7 @@ const buildSKCondition = (
   for (let i = 0; i < skFields.length; i++) {
     const field = skFields[i]!;
     const value = skFilter[field];
-    if (value === undefined) break;
+    if (value === undefined) {break;}
     lastFieldIndex = i;
 
     if (isOperator(value)) {
@@ -107,7 +107,7 @@ const FILTER_OPERATORS = ["beginsWith", "gte", "lte", "gt", "lt", "between"] as 
 type FilterOperatorName = (typeof FILTER_OPERATORS)[number];
 
 const isFilterOperator = (value: unknown): value is Record<FilterOperatorName, unknown> => {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null) {return false;}
   const keys = Object.keys(value);
   return keys.length === 1 && FILTER_OPERATORS.includes(keys[0] as FilterOperatorName);
 };
@@ -120,7 +120,7 @@ const buildFilterExpression = (
   const values: Record<string, unknown> = {};
 
   for (const [field, value] of Object.entries(filter)) {
-    if (value === undefined) continue;
+    if (value === undefined) {continue;}
 
     const nameKey = `#f_${field}`;
     const valueKey = `:f_${field}`;
@@ -195,7 +195,7 @@ interface QueryState {
 
 const createQuery = <T>(state: QueryState): Query<T> => ({
   limit: (n: number) => createQuery<T>({ ...state, _limit: n }),
-  cursor: (c: string) => createQuery<T>({ ...state, _cursor: c }),
+  cursor: (c?: string) => createQuery<T>({ ...state, _cursor: c }),
   reverse: () => createQuery<T>({ ...state, _reverse: true }),
   filter: (f: Filter<T>) => {
     const { expression, names, values } = buildFilterExpression(f as Record<string, unknown>);

@@ -1,41 +1,17 @@
 import { api } from "@broccoliapps/shared";
-import * as v from "valibot";
+import {
+  authExchangeRequest,
+  authExchangeResponse,
+  refreshTokenRequest,
+  refreshTokenResponse,
+} from "./auth.dto";
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  name: string;
-  isNewUser: boolean;
-  targetCurrency: string | null;
-};
-
+// POST /auth/exchange - exchange code for tokens
 export const authExchange = api("POST", "/auth/exchange")
-  .withRequest({
-    code: v.pipe(v.string(), v.maxLength(1024)),
-  })
-  .withResponse<{
-    accessToken: string;
-    accessTokenExpiresAt: number;
-    refreshToken: string;
-    refreshTokenExpiresAt: number;
-    user: AuthUser;
-  }>();
+  .withRequest(authExchangeRequest)
+  .withResponse(authExchangeResponse);
 
-export type TokenRefresh = {
-  id: string;
-  email: string;
-  name: string;
-  isNewUser: boolean;
-  targetCurrency: string | null;
-};
-
+// POST /auth/refresh - refresh tokens
 export const refreshToken = api("POST", "/auth/refresh")
-  .withRequest({
-    refreshToken: v.pipe(v.string(), v.maxLength(1024)),
-  })
-  .withResponse<{
-    accessToken: string;
-    accessTokenExpiresAt: number;
-    refreshToken: string;
-    refreshTokenExpiresAt: number;
-  }>();
+  .withRequest(refreshTokenRequest)
+  .withResponse(refreshTokenResponse);

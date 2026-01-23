@@ -1,4 +1,4 @@
-import type { ApiContract, HttpMethod, HttpResponse, Schema } from "@broccoliapps/shared";
+import type { ApiContract, HttpMethod, HttpResponse, ResponseSchema, Schema } from "@broccoliapps/shared";
 import type { Context } from "hono";
 import * as v from "valibot";
 import { log } from "../log";
@@ -32,8 +32,12 @@ export class ApiRouter extends HttpRouter {
     fn: (req: TReq, res: ApiResponse<TRes>, ctx: RequestContext) => Promise<HttpResponse<TRes>>
   ): this {
     const res = createApiResponse<TRes>();
-    this.registerRoute(contract.method, contract.path, contract.schema, (req: TReq, ctx: RequestContext) =>
-      fn(req, res, ctx)
+    this.registerRoute(
+      contract.method,
+      contract.path,
+      contract.schema,
+      contract.responseSchema,
+      (req: TReq, ctx: RequestContext) => fn(req, res, ctx)
     );
     return this;
   }
@@ -42,6 +46,7 @@ export class ApiRouter extends HttpRouter {
     method: HttpMethod,
     path: string,
     schema: Schema<TReq>,
+    responseSchema: ResponseSchema<TRes> | undefined,
     handler: HttpHandler<TReq, TRes>
   ): void {
     const honoHandler = async (c: Context): Promise<Response> => {
@@ -56,7 +61,13 @@ export class ApiRouter extends HttpRouter {
           return c.body(null, 204, response.headers);
         }
 
-        return c.json(response.data, status as 200, response.headers);
+        // Strip extra fields if response schema is defined
+        let data = response.data;
+        if (responseSchema && data !== undefined) {
+          data = v.parse(responseSchema, data);
+        }
+
+        return c.json(data, status as 200, response.headers);
       } catch (error) {
         return this.handleApiError(c, error);
       }

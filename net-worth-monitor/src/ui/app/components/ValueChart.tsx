@@ -11,7 +11,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
-import { getCurrencySymbol } from "../currency";
+import { getCurrencySymbol } from "../../../shared/currency";
 import { formatMonthLabel } from "../utils/dateUtils";
 import { fillToCurrentMonth } from "../utils/historyUtils";
 import { NoDataPlaceholder } from "./NoDataPlaceholder";
@@ -175,7 +175,7 @@ export const ValueChart = ({ data, variant = "default", currency = "USD" }: Valu
   };
 
   return (
-    <div class="h-64 mb-6 bg-white dark:bg-black rounded-lg p-3">
+    <div class="h-64 p-2 bg-white dark:bg-black rounded-lg">
       <Line data={chartData} options={options} />
     </div>
   );
