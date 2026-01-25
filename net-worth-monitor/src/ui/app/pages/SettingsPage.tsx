@@ -1,12 +1,10 @@
-import { cache } from "@broccoliapps/browser";
 import { useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
-import { patchUser } from "../../../shared/api-contracts";
+import { getUserSync, patchUser, signOut } from "../api";
 import { PageHeader, TargetCurrencySettings, ThemeSettings } from "../components";
 import { type Theme, getStoredTheme } from "../utils/themeUtils";
 
 export const SettingsPage = () => {
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [currency, setCurrency] = useState(user?.targetCurrency || "USD");
   const [saving, setSaving] = useState(false);
@@ -17,8 +15,7 @@ export const SettingsPage = () => {
     setSaving(true);
     setSaved(false);
     try {
-      const { user: updatedUser } = await patchUser.invoke({ targetCurrency: newCurrency });
-      cache.set("user", { ...user, targetCurrency: updatedUser.targetCurrency });
+      await patchUser({ targetCurrency: newCurrency });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -26,13 +23,6 @@ export const SettingsPage = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleSignOut = () => {
-    cache.remove("accessToken");
-    cache.remove("refreshToken");
-    cache.remove("user");
-    window.location.href = "/";
   };
 
   return (
@@ -51,7 +41,7 @@ export const SettingsPage = () => {
       <div class="mt-8 pt-8 border-t border-neutral-200 dark:border-neutral-700">
         <button
           type="button"
-          onClick={handleSignOut}
+          onClick={signOut}
           class="w-full px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
         >
           Sign out

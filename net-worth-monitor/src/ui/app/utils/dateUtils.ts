@@ -114,3 +114,12 @@ export const getMinMonthsBack = (frequency?: UpdateFrequency): number => {
       return 1;
   }
 };
+
+/**
+ * Check if an account has missed its update (nextUpdate <= current month)
+ */
+export const hasMissedUpdate = (nextUpdate?: string): boolean => {
+  if (!nextUpdate) return false;
+  const currentMonth = getCurrentMonth();
+  return nextUpdate <= currentMonth;
+};

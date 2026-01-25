@@ -1,6 +1,5 @@
-import { cache } from "@broccoliapps/browser";
 import { useEffect, useState } from "preact/hooks";
-import { getExchangeRates } from "../api/exchange-rates";
+import { getExchangeRates } from "../api";
 import type { ExchangeRateMap } from "../utils/currencyConversion";
 
 type UseExchangeRatesResult = {
@@ -30,7 +29,6 @@ export function useExchangeRates(
 
     // No currencies to fetch
     if (currenciesToFetch.length === 0) {
-      cache.set("exchangeRates", {});
       setRates({});
       setLoading(false);
       return;
@@ -38,7 +36,6 @@ export function useExchangeRates(
 
     // No data yet
     if (!earliestMonth) {
-      cache.set("exchangeRates", {});
       setRates({});
       setLoading(false);
       return;
@@ -62,8 +59,7 @@ export function useExchangeRates(
           ratesByMonth[currency] = rateMap;
         }
 
-        // Cache rates globally for MoneyDisplay to access
-        cache.set("exchangeRates", ratesByMonth);
+        // Cache is handled by getExchangeRates read-through cache
         setRates(ratesByMonth);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch exchange rates");

@@ -1,9 +1,7 @@
-import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { BucketDto, UpdateFrequency } from "../../../shared/api-contracts/dto";
-import { getBuckets, postAccount, putAccountBuckets } from "../api";
+import { getBuckets, getUserSync, postAccount, putAccountBuckets } from "../api";
 import { getCurrentMonth, shouldShowMonth } from "../utils/dateUtils";
 import { BucketPicker } from "./BucketPicker";
 import { Button } from "./Button";
@@ -21,7 +19,7 @@ type NewAccountFormProps = {
 };
 
 export const NewAccountForm = ({ onSuccess, onBack }: NewAccountFormProps) => {
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   const [viewMode, setViewMode] = useState<"quick" | "advanced">("quick");
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState("");

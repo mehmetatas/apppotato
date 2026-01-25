@@ -1,12 +1,10 @@
-import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
-import { patchUser } from "../../../shared/api-contracts";
+import { getUserSync, patchUser } from "../api";
 import { Button, CurrencyPicker } from "../components";
 
 export const OnboardingPage = () => {
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   const [currency, setCurrency] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +18,7 @@ export const OnboardingPage = () => {
     setError(null);
 
     try {
-      const { user: updatedUser } = await patchUser.invoke({ targetCurrency: currency });
-      cache.set("user", { ...user, targetCurrency: updatedUser.targetCurrency });
+      await patchUser({ targetCurrency: currency });
       route("/app");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save currency");

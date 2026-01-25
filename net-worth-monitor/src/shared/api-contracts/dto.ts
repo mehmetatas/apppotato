@@ -23,6 +23,7 @@ export const accountDto = {
   archivedAt: v.optional(v.number()),
   bucketIds: v.optional(v.array(v.string())),
   updateFrequency: v.optional(updateFrequencySchema),
+  nextUpdate: v.optional(v.string()),
   history: v.optional(historySchema),
 };
 export type AccountDto = v.InferOutput<v.ObjectSchema<typeof accountDto, undefined>>;

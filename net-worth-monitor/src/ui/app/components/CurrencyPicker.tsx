@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
+import { getCurrencies } from "../../../shared/currency";
 import { useClickOutside } from "../hooks";
 import { DropdownButton } from "./DropdownButton";
 
@@ -9,30 +10,17 @@ type CurrencyPickerProps = {
 };
 
 const POPULAR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "MXN"];
+const ALL_CURRENCIES = getCurrencies().sort();
 
 export const CurrencyPicker = ({ value, onChange, placeholder = "Select currency" }: CurrencyPickerProps) => {
-  const [currencies, setCurrencies] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetch("https://open.er-api.com/v6/latest/USD")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.rates) {
-          setCurrencies(Object.keys(data.rates).sort());
-        }
-      })
-      .catch(() => setCurrencies(POPULAR_CURRENCIES))
-      .finally(() => setLoading(false));
-  }, []);
 
   const closeDropdown = useCallback(() => setOpen(false), []);
   useClickOutside(containerRef, closeDropdown, open);
 
-  const filteredCurrencies = currencies.filter((c) =>
+  const filteredCurrencies = ALL_CURRENCIES.filter((c) =>
     c.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -51,7 +39,6 @@ export const CurrencyPicker = ({ value, onChange, placeholder = "Select currency
     <div ref={containerRef} class="relative">
       <DropdownButton
         onClick={() => setOpen(!open)}
-        loading={loading}
         value={value}
         placeholder={placeholder}
       />

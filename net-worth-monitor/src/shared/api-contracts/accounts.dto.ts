@@ -70,18 +70,36 @@ export const getAccountHistoryResponse = {
 export type GetAccountHistoryResponse = v.InferOutput<v.ObjectSchema<typeof getAccountHistoryResponse, undefined>>;
 
 // ============================================================================
-// PUT /accounts/:id/history - bulk update history
+// POST /accounts/:id/history-item - add/update a single history item
 // ============================================================================
-export const putAccountHistoryRequest = {
-  id: v.string(),
-  history: historySchema,
+export const postHistoryItemRequest = {
+  id: v.string(), // accountId from URL
+  month: v.pipe(v.string(), v.regex(/^\d{4}-\d{2}$/, "Month must be in yyyy-mm format")),
+  value: v.number(),
 };
-export type PutAccountHistoryRequest = v.InferOutput<v.ObjectSchema<typeof putAccountHistoryRequest, undefined>>;
+export type PostHistoryItemRequest = v.InferOutput<v.ObjectSchema<typeof postHistoryItemRequest, undefined>>;
 
-export const putAccountHistoryResponse = {
-  history: historySchema,
+export const postHistoryItemResponse = {
+  month: v.string(),
+  value: v.number(),
+  nextUpdate: v.optional(v.string()),
 };
-export type PutAccountHistoryResponse = v.InferOutput<v.ObjectSchema<typeof putAccountHistoryResponse, undefined>>;
+export type PostHistoryItemResponse = v.InferOutput<v.ObjectSchema<typeof postHistoryItemResponse, undefined>>;
+
+// ============================================================================
+// DELETE /accounts/:id/history-item/:month - delete a single history item
+// ============================================================================
+export const deleteHistoryItemRequest = {
+  id: v.string(), // accountId from URL
+  month: v.pipe(v.string(), v.regex(/^\d{4}-\d{2}$/, "Month must be in yyyy-mm format")),
+};
+export type DeleteHistoryItemRequest = v.InferOutput<v.ObjectSchema<typeof deleteHistoryItemRequest, undefined>>;
+
+export const deleteHistoryItemResponse = {
+  success: v.boolean(),
+  nextUpdate: v.optional(v.string()),
+};
+export type DeleteHistoryItemResponse = v.InferOutput<v.ObjectSchema<typeof deleteHistoryItemResponse, undefined>>;
 
 // ============================================================================
 // GET /accounts/:id/buckets - get buckets for an account

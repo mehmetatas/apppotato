@@ -1,11 +1,13 @@
+import { cache } from "@broccoliapps/browser";
+import { CACHE_KEYS } from "../api/cache";
+
 export type Theme = "system" | "light" | "dark";
 
 /**
- * Get the stored theme from localStorage
+ * Get the stored theme from cache
  */
 export const getStoredTheme = (): Theme => {
-  if (typeof localStorage === "undefined") {return "system";}
-  return (localStorage.getItem("theme") as Theme) || "system";
+  return cache.get<Theme>(CACHE_KEYS.theme) ?? "system";
 };
 
 /**
@@ -33,7 +35,7 @@ export const applyTheme = (theme?: Theme): void => {
  * Save and apply a theme
  */
 export const setTheme = (theme: Theme): void => {
-  localStorage.setItem("theme", theme);
+  cache.set(CACHE_KEYS.theme, theme);
   applyTheme(theme);
 };
 

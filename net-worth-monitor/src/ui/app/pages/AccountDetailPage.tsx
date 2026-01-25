@@ -1,15 +1,15 @@
-import { cache } from "@broccoliapps/browser";
 import { Trash2 } from "lucide-preact";
 import { route } from "preact-router";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
 import {
   deleteAccount,
+  deleteHistoryItem,
   getAccountDetail,
+  getUserSync,
   patchAccount,
+  postHistoryItem,
   putAccountBuckets,
-  putAccountHistory,
 } from "../api";
 import {
   AccountDetailSkeleton,
@@ -59,7 +59,7 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
 
   // Currency toggle state
   const [showConverted, setShowConverted] = useState(false);
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   const targetCurrency = user?.targetCurrency || "USD";
 
   // Get earliest month for exchange rates
@@ -111,41 +111,40 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     }, 1000);
   };
 
-  // Helper: Save history to server
-  const saveHistory = async (
-    historyToSave: Record<string, number | undefined>,
-    options?: { month?: string; alsoUpdateEdited?: boolean }
-  ) => {
+  // Helper: Save a single history item to server
+  const saveHistoryItem = async (month: string, value: number) => {
     if (!account) { return; }
 
-    const { month, alsoUpdateEdited } = options ?? {};
-
-    if (month) {
-      setSavingMonths((prev) => ({ ...prev, [month]: true }));
-    }
+    setSavingMonths((prev) => ({ ...prev, [month]: true }));
 
     try {
-      // Filter out undefined values for the API
-      const historyRecord: Record<string, number> = {};
-      for (const [m, value] of Object.entries(historyToSave)) {
-        if (value !== undefined) {
-          historyRecord[m] = value;
-        }
-      }
-
-      const result = await putAccountHistory({
-        id: account.id,
-        history: historyRecord,
-      });
-      updateHistoryFromResponse(result.history, alsoUpdateEdited);
-      if (month) {
-        showSaveSuccess(month);
-      }
-      return result;
+      await postHistoryItem({ id: account.id, month, value });
+      // Update local state with the new value
+      setOriginalHistory((prev) => ({ ...prev, [month]: value }));
+      showSaveSuccess(month);
     } catch (err) {
-      if (month) {
-        setSavingMonths((prev) => ({ ...prev, [month]: false }));
-      }
+      setSavingMonths((prev) => ({ ...prev, [month]: false }));
+      throw err;
+    }
+  };
+
+  // Helper: Delete a single history item from server
+  const deleteHistoryItemFromServer = async (month: string) => {
+    if (!account) { return; }
+
+    setSavingMonths((prev) => ({ ...prev, [month]: true }));
+
+    try {
+      await deleteHistoryItem({ id: account.id, month });
+      // Remove from local state
+      setOriginalHistory((prev) => {
+        const newHistory = { ...prev };
+        delete newHistory[month];
+        return newHistory;
+      });
+      showSaveSuccess(month);
+    } catch (err) {
+      setSavingMonths((prev) => ({ ...prev, [month]: false }));
       throw err;
     }
   };
@@ -181,8 +180,7 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     // (can't rely on blur event since the input is removed from DOM)
     if (value === undefined && originalHistory[month] !== undefined) {
       try {
-        const newHistory = { ...editedHistory, [month]: undefined };
-        await saveHistory(newHistory, { month });
+        await deleteHistoryItemFromServer(month);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to delete entry");
         // Revert the deletion on error
@@ -200,9 +198,11 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
     // Check if value changed
     if (currentValue === originalValue) { return; }
     if (currentValue === undefined && originalValue === undefined) { return; }
+    // Skip if value is undefined (deletion is handled in handleHistoryChange)
+    if (currentValue === undefined) { return; }
 
     try {
-      await saveHistory(editedHistory, { month });
+      await saveHistoryItem(month, currentValue);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
     }

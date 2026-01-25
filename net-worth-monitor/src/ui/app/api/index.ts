@@ -4,14 +4,15 @@ export { getDashboard } from "./dashboard";
 // Accounts
 export {
   deleteAccount,
+  deleteHistoryItem,
   getAccountBuckets,
   getAccountDetail,
   getAccountHistory,
   getAccounts,
   patchAccount,
   postAccount,
+  postHistoryItem,
   putAccountBuckets,
-  putAccountHistory,
 } from "./accounts";
 
 // Buckets
@@ -25,7 +26,16 @@ export {
 } from "./buckets";
 
 // Exchange rates
-export { getExchangeRates } from "./exchange-rates";
+export { getAggregatedRates, getExchangeRates } from "./exchange-rates";
+
+// Users
+export {
+  getUser,
+  getUserSync,
+  patchUser,
+  setUserFromAuth,
+  signOut,
+} from "./users";
 
 // Cache management
 export { invalidateAll } from "./invalidation";

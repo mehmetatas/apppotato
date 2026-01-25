@@ -1,15 +1,32 @@
-import { cache } from "@broccoliapps/browser";
-import { useCallback, useRef, useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
+import { Bell } from "lucide-preact";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import type { AccountDto } from "../../../shared/api-contracts/dto";
+import { getDashboard, getUserSync } from "../api";
 import { useClickOutside } from "../hooks";
+import { hasMissedUpdate } from "../utils/dateUtils";
 
 export const Header = () => {
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [accountsNeedingUpdate, setAccountsNeedingUpdate] = useState<AccountDto[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  const closeNotifications = useCallback(() => setNotificationsOpen(false), []);
   useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
+  useClickOutside(notificationsRef, closeNotifications, notificationsOpen);
+
+  useEffect(() => {
+    if (!user) return;
+    getDashboard().then((data) => {
+      const needsUpdate = data.accounts.filter(
+        (account) => !account.archivedAt && hasMissedUpdate(account.nextUpdate)
+      );
+      setAccountsNeedingUpdate(needsUpdate);
+    });
+  }, []);
 
   return (
     <header class="py-4 px-4 bg-white/50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-700">
@@ -19,6 +36,40 @@ export const Header = () => {
         </a>
         {user && (
           <div class="flex items-center gap-3">
+            {/* Notifications bell - only show if there are accounts needing update */}
+            {accountsNeedingUpdate.length > 0 && (
+              <div class="relative" ref={notificationsRef}>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(!notificationsOpen)}
+                  class="relative p-2 text-neutral-600 dark:text-neutral-300 hover:text-neutral-800 dark:hover:text-neutral-100 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                >
+                  <Bell size={20} />
+                  <span class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center px-1 text-xs font-medium text-white bg-red-500 rounded-full">
+                    {accountsNeedingUpdate.length}
+                  </span>
+                </button>
+                {notificationsOpen && (
+                  <div class="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-700 py-1 z-50">
+                    <div class="px-3 py-2 border-b border-neutral-200 dark:border-neutral-700">
+                      <p class="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                        Accounts needing update
+                      </p>
+                    </div>
+                    {accountsNeedingUpdate.map((account) => (
+                      <a
+                        key={account.id}
+                        href={`/app/accounts/${account.id}`}
+                        class="block px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                        onClick={() => setNotificationsOpen(false)}
+                      >
+                        {account.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <a
               href="/app/new"
               class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"

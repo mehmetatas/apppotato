@@ -1,9 +1,7 @@
-import { cache } from "@broccoliapps/browser";
 import { route } from "preact-router";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
-import { getDashboard } from "../api";
+import { getDashboard, getUserSync } from "../api";
 import { AccountList, BucketFilterPills, HomePageSkeleton, MoneyDisplay, NewAccountForm, ValueChart } from "../components";
 import { useExchangeRates } from "../hooks/useExchangeRates";
 import { convertLatestValues, getEarliestMonth, getUniqueCurrencies } from "../utils/currencyConversion";
@@ -12,7 +10,7 @@ import { calculateNetWorthWithConversion } from "../utils/historyUtils";
 
 export const HomePage = () => {
   // Redirect to onboarding if user has no currency set
-  const user = cache.get<AuthUserDto>("user");
+  const user = getUserSync();
   useEffect(() => {
     if (user && !user.targetCurrency) {
       route("/app/onboarding");

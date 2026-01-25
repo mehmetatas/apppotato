@@ -1,6 +1,8 @@
 import { api } from "@broccoliapps/shared";
 import {
   deleteAccountRequest,
+  deleteHistoryItemRequest,
+  deleteHistoryItemResponse,
   getAccountBucketsRequest,
   getAccountBucketsResponse,
   getAccountDetailRequest,
@@ -14,9 +16,9 @@ import {
   patchAccountResponse,
   postAccountRequest,
   postAccountResponse,
+  postHistoryItemRequest,
+  postHistoryItemResponse,
   putAccountBucketsRequest,
-  putAccountHistoryRequest,
-  putAccountHistoryResponse,
 } from "./accounts.dto";
 
 // POST /accounts - create account with history items
@@ -47,10 +49,15 @@ export const getAccountHistory = api("GET", "/accounts/:id/history")
   .withRequest(getAccountHistoryRequest)
   .withResponse(getAccountHistoryResponse);
 
-// PUT /accounts/:id/history - bulk update history items
-export const putAccountHistory = api("PUT", "/accounts/:id/history")
-  .withRequest(putAccountHistoryRequest)
-  .withResponse(putAccountHistoryResponse);
+// POST /accounts/:id/history-item - add/update a single history item
+export const postHistoryItem = api("POST", "/accounts/:id/history-item")
+  .withRequest(postHistoryItemRequest)
+  .withResponse(postHistoryItemResponse);
+
+// DELETE /accounts/:id/history-item/:month - delete a single history item
+export const deleteHistoryItem = api("DELETE", "/accounts/:id/history-item/:month")
+  .withRequest(deleteHistoryItemRequest)
+  .withResponse(deleteHistoryItemResponse);
 
 // GET /accounts/:id/buckets - get buckets for an account
 export const getAccountBuckets = api("GET", "/accounts/:id/buckets")

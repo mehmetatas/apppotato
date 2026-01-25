@@ -1,105 +1,196 @@
 import { cache } from "@broccoliapps/browser";
 import {
   deleteAccount as deleteAccountApi,
+  deleteHistoryItem as deleteHistoryItemApi,
   getAccountBuckets as getAccountBucketsApi,
   getAccountDetail as getAccountDetailApi,
   getAccountHistory as getAccountHistoryApi,
   getAccounts as getAccountsApi,
+  getDashboard as getDashboardApi,
   patchAccount as patchAccountApi,
   postAccount as postAccountApi,
+  postHistoryItem as postHistoryItemApi,
   putAccountBuckets as putAccountBucketsApi,
-  putAccountHistory as putAccountHistoryApi,
 } from "../../../shared/api-contracts";
-import { CACHE_CONFIG } from "./cache-config";
-import { CACHE_KEYS } from "./cache-keys";
-import { invalidateAccount, invalidateAccountBuckets, invalidateAccounts } from "./invalidation";
+import { CACHE_KEYS, sessionStorage } from "./cache";
 
+type DashboardResponse = Awaited<ReturnType<typeof getDashboardApi.invoke>>;
+type Account = DashboardResponse["accounts"][number];
+type Bucket = DashboardResponse["buckets"][number];
 type AccountsResponse = Awaited<ReturnType<typeof getAccountsApi.invoke>>;
 type AccountDetailResponse = Awaited<ReturnType<typeof getAccountDetailApi.invoke>>;
 type AccountHistoryResponse = Awaited<ReturnType<typeof getAccountHistoryApi.invoke>>;
 type AccountBucketsResponse = Awaited<ReturnType<typeof getAccountBucketsApi.invoke>>;
 
-const opts = { storage: CACHE_CONFIG.storage };
-
-// GET /accounts - list all accounts (cache-first)
+// GET /accounts - list all accounts
 export const getAccounts = async (): Promise<AccountsResponse> => {
-  const cached = cache.get<AccountsResponse>(CACHE_KEYS.accounts, opts);
-  if (cached) {return cached;}
+  // Only use cache if dashboard was fetched (so we know we have all accounts)
+  const dashboardFetched = cache.get<boolean>(CACHE_KEYS.dashboardFetched, sessionStorage);
+  if (dashboardFetched) {
+    const accounts = getAllAccountsFromCache();
+    if (accounts.length > 0) return { accounts };
+  }
 
   const data = await getAccountsApi.invoke({});
-  cache.set(CACHE_KEYS.accounts, data, undefined, opts);
+  setAllAccountsInCache(data.accounts);
+  cache.set(CACHE_KEYS.dashboardFetched, true, undefined, sessionStorage);
   return data;
 };
 
-// GET /accounts/:id/detail - get account with all related data (cache-first)
+// GET /accounts/:id/detail - get account with all related data
 export const getAccountDetail = async (id: string): Promise<AccountDetailResponse> => {
-  const cached = cache.get<AccountDetailResponse>(CACHE_KEYS.accountDetail(id), opts);
-  if (cached) {return cached;}
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  const buckets = cache.get<Bucket[]>(CACHE_KEYS.buckets, sessionStorage);
+
+  if (account && buckets) {
+    const accountBuckets = account.bucketIds
+      ? buckets.filter(b => account.bucketIds!.includes(b.id))
+      : [];
+    return { account, accountBuckets, allBuckets: buckets };
+  }
 
   const data = await getAccountDetailApi.invoke({ id });
-  cache.set(CACHE_KEYS.accountDetail(id), data, undefined, opts);
+  setAccountInCache(data.account);
+  cache.set(CACHE_KEYS.buckets, data.allBuckets, undefined, sessionStorage);
   return data;
 };
 
-// GET /accounts/:id/history - get history items (cache-first)
+// GET /accounts/:id/history - get history items
 export const getAccountHistory = async (id: string): Promise<AccountHistoryResponse> => {
-  const cached = cache.get<AccountHistoryResponse>(CACHE_KEYS.accountHistory(id), opts);
-  if (cached) {return cached;}
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  if (account?.history) {
+    return { history: account.history };
+  }
 
   const data = await getAccountHistoryApi.invoke({ id });
-  cache.set(CACHE_KEYS.accountHistory(id), data, undefined, opts);
+
+  if (account) {
+    setAccountInCache({ ...account, history: data.history });
+  }
+
   return data;
 };
 
-// GET /accounts/:id/buckets - get buckets for an account (cache-first)
+// GET /accounts/:id/buckets - get buckets for an account
 export const getAccountBuckets = async (id: string): Promise<AccountBucketsResponse> => {
-  const cached = cache.get<AccountBucketsResponse>(CACHE_KEYS.accountBuckets(id), opts);
-  if (cached) {return cached;}
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  const buckets = cache.get<Bucket[]>(CACHE_KEYS.buckets, sessionStorage);
+
+  if (account?.bucketIds && buckets) {
+    const accountBuckets = buckets.filter(b => account.bucketIds!.includes(b.id));
+    return { buckets: accountBuckets };
+  }
 
   const data = await getAccountBucketsApi.invoke({ id });
-  cache.set(CACHE_KEYS.accountBuckets(id), data, undefined, opts);
+
+  if (account) {
+    const bucketIds = data.buckets.map(b => b.id);
+    setAccountInCache({ ...account, bucketIds });
+  }
+
   return data;
 };
 
-// POST /accounts - create account (invalidates caches)
+// POST /accounts - create account
 export const postAccount = async (
   ...args: Parameters<typeof postAccountApi.invoke>
 ): Promise<Awaited<ReturnType<typeof postAccountApi.invoke>>> => {
   const result = await postAccountApi.invoke(...args);
-  invalidateAccounts();
+  setAccountInCache(result.account);
   return result;
 };
 
-// PATCH /accounts/:id - update account (invalidates caches)
+// PATCH /accounts/:id - update account
 export const patchAccount = async (
   ...args: Parameters<typeof patchAccountApi.invoke>
 ): Promise<Awaited<ReturnType<typeof patchAccountApi.invoke>>> => {
   const result = await patchAccountApi.invoke(...args);
-  invalidateAccount(args[0]!.id);
+  setAccountInCache(result.account);
   return result;
 };
 
-// DELETE /accounts/:id - delete account (invalidates caches)
+// DELETE /accounts/:id - delete account
 export const deleteAccount = async (
   ...args: Parameters<typeof deleteAccountApi.invoke>
 ): Promise<void> => {
   await deleteAccountApi.invoke(...args);
-  invalidateAccounts();
+  cache.remove(CACHE_KEYS.account(args[0]!.id), sessionStorage);
 };
 
-// PUT /accounts/:id/history - update history (invalidates caches)
-export const putAccountHistory = async (
-  ...args: Parameters<typeof putAccountHistoryApi.invoke>
-): Promise<Awaited<ReturnType<typeof putAccountHistoryApi.invoke>>> => {
-  const result = await putAccountHistoryApi.invoke(...args);
-  invalidateAccount(args[0]!.id);
+// POST /accounts/:id/history-item - add/update a single history item
+export const postHistoryItem = async (
+  ...args: Parameters<typeof postHistoryItemApi.invoke>
+): Promise<Awaited<ReturnType<typeof postHistoryItemApi.invoke>>> => {
+  const result = await postHistoryItemApi.invoke(...args);
+  updateAccountHistory(args[0]!.id, result.month, result.value, result.nextUpdate);
   return result;
 };
 
-// PUT /accounts/:id/buckets - set buckets for account (invalidates caches)
+// DELETE /accounts/:id/history-item/:month - delete a single history item
+export const deleteHistoryItem = async (
+  ...args: Parameters<typeof deleteHistoryItemApi.invoke>
+): Promise<Awaited<ReturnType<typeof deleteHistoryItemApi.invoke>>> => {
+  const result = await deleteHistoryItemApi.invoke(...args);
+  removeAccountHistoryItem(args[0]!.id, args[0]!.month, result.nextUpdate);
+  return result;
+};
+
+// PUT /accounts/:id/buckets - set buckets for account
 export const putAccountBuckets = async (
   ...args: Parameters<typeof putAccountBucketsApi.invoke>
 ): Promise<void> => {
   await putAccountBucketsApi.invoke(...args);
-  invalidateAccountBuckets(args[0]!.id);
+  updateAccountBucketIds(args[0]!.id, args[0]!.bucketIds);
+};
+
+// Helper functions
+
+const getAllAccountsFromCache = (): Account[] => {
+  const keys = cache.keys(CACHE_KEYS.accountPrefix, sessionStorage);
+  const accounts: Account[] = [];
+  for (const key of keys) {
+    const account = cache.get<Account>(key, sessionStorage);
+    if (account) accounts.push(account);
+  }
+  return accounts;
+};
+
+export const setAllAccountsInCache = (accounts: Account[]) => {
+  for (const account of accounts) {
+    cache.set(CACHE_KEYS.account(account.id), account, undefined, sessionStorage);
+  }
+};
+
+const setAccountInCache = (account: Account) => {
+  cache.set(CACHE_KEYS.account(account.id), account, undefined, sessionStorage);
+};
+
+const updateAccountHistory = (id: string, month: string, value: number, nextUpdate?: string) => {
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  if (account) {
+    setAccountInCache({
+      ...account,
+      history: { ...account.history, [month]: value },
+      nextUpdate: nextUpdate ?? account.nextUpdate,
+    });
+  }
+};
+
+const removeAccountHistoryItem = (id: string, month: string, nextUpdate?: string) => {
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  if (account) {
+    const { [month]: _, ...rest } = account.history ?? {};
+    setAccountInCache({
+      ...account,
+      history: rest,
+      nextUpdate: nextUpdate ?? account.nextUpdate,
+    });
+  }
+};
+
+const updateAccountBucketIds = (id: string, bucketIds: string[]) => {
+  const account = cache.get<Account>(CACHE_KEYS.account(id), sessionStorage);
+  if (account) {
+    setAccountInCache({ ...account, bucketIds });
+  }
 };

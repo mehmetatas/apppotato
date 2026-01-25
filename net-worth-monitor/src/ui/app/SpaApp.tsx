@@ -1,6 +1,7 @@
 import { cache } from "@broccoliapps/browser";
 import type { AnchorHTMLAttributes, ComponentType } from "preact";
 import Router, { type RoutableProps } from "preact-router";
+import { CACHE_KEYS } from "./api/cache";
 import { Layout } from "./layout/Layout";
 import { AccountDetailPage, ArchivedAccountsPage, AuthCallback, BucketsPage, HomePage, NewAccountPage, OnboardingPage, SettingsPage } from "./pages";
 
@@ -49,7 +50,7 @@ export const App = () => {
   const isOnboarding = currentPath === appPath("/onboarding");
 
   // Allow auth callback and onboarding without refresh token check
-  if (!isAuthCallback && !isOnboarding && !cache.get("refreshToken")) {
+  if (!isAuthCallback && !isOnboarding && !cache.get(CACHE_KEYS.refreshToken)) {
     window.location.href = "/";
     return null;
   }

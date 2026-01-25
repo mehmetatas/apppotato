@@ -8,10 +8,11 @@ export type Account = {
   name: string;
   type: "asset" | "debt";
   currency: string;
+  updateFrequency: UpdateFrequency;
+  nextUpdate: string; // yyyy-mm set upon account creation and every historyItem update based on update frequency.
   createdAt: number;
   archivedAt?: number;
   bucketIds?: string[];
-  updateFrequency?: UpdateFrequency;
 };
 
 
@@ -22,6 +23,6 @@ export type HistoryItem = {
   value: number;
 };
 
-export const accounts = table<Account>("account").key(["userId"], ["id"]).build();
+export const accounts = table<Account>("account").key(["userId"], ["id"]).gsi1("byNextUpdate", [], ["nextUpdate"]).build();
 
 export const historyItems = table<HistoryItem>("historyItem").key(["userId", "accountId"], ["month"]).build();

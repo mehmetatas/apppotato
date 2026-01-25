@@ -1,9 +1,11 @@
 import { HttpError } from "@broccoliapps/backend";
 import { random } from "@broccoliapps/shared";
 import { accounts, historyItems } from "../../db/accounts";
+import { calculateNextUpdate } from "../utils/nextUpdateCalculator";
 import { buckets } from "../../db/buckets";
 import {
   deleteAccount,
+  deleteHistoryItem,
   getAccount,
   getAccountBuckets,
   getAccountDetail,
@@ -11,8 +13,8 @@ import {
   getAccounts,
   patchAccount,
   postAccount,
+  postHistoryItem,
   putAccountBuckets,
-  putAccountHistory,
 } from "../../shared/api-contracts";
 import { api } from "../lambda";
 
@@ -68,8 +70,8 @@ api.register(getAccountHistory, async (req, res, ctx) => {
   return res.ok({ history });
 });
 
-// PUT /accounts/:id/history - bulk update history items
-api.register(putAccountHistory, async (req, res, ctx) => {
+// POST /accounts/:id/history-item - add/update a single history item
+api.register(postHistoryItem, async (req, res, ctx) => {
   const { userId } = await ctx.getUser();
   const account = await accounts.get({ userId }, { id: req.id });
 
@@ -77,34 +79,52 @@ api.register(putAccountHistory, async (req, res, ctx) => {
     throw new HttpError(404, "Account not found");
   }
 
-  // Get existing items to find which ones to delete
-  const existingItems = await historyItems.query({ userId, accountId: req.id }).all();
-  const newMonths = new Set(Object.keys(req.history));
-
-  // Delete items that are no longer in the list
-  const itemsToDelete = existingItems.filter((item) => !newMonths.has(item.month));
-  if (itemsToDelete.length > 0) {
-    await historyItems.batchDelete(
-      itemsToDelete.map((item) => ({
-        pk: { userId, accountId: req.id },
-        sk: { month: item.month },
-      }))
-    );
-  }
-
-  // Create/update history items from Record
-  const items = Object.entries(req.history).map(([month, value]) => ({
+  // Upsert the single history item
+  await historyItems.put({
     userId,
     accountId: req.id,
-    month,
-    value,
-  }));
+    month: req.month,
+    value: req.value,
+  });
 
-  if (items.length > 0) {
-    await historyItems.batchPut(items);
+  // Fetch all history items to recalculate nextUpdate
+  const allItems = await historyItems.query({ userId, accountId: req.id }).all();
+  const history: Record<string, number> = {};
+  for (const item of allItems) {
+    history[item.month] = item.value;
   }
 
-  return res.ok({ history: req.history });
+  // Recalculate and update nextUpdate
+  const nextUpdate = calculateNextUpdate(history, account.updateFrequency);
+  await accounts.put({ ...account, nextUpdate });
+
+  return res.ok({ month: req.month, value: req.value, nextUpdate });
+});
+
+// DELETE /accounts/:id/history-item/:month - delete a single history item
+api.register(deleteHistoryItem, async (req, res, ctx) => {
+  const { userId } = await ctx.getUser();
+  const account = await accounts.get({ userId }, { id: req.id });
+
+  if (!account) {
+    throw new HttpError(404, "Account not found");
+  }
+
+  // Delete the single history item by month
+  await historyItems.delete({ userId, accountId: req.id }, { month: req.month });
+
+  // Fetch remaining history items to recalculate nextUpdate
+  const remainingItems = await historyItems.query({ userId, accountId: req.id }).all();
+  const history: Record<string, number> = {};
+  for (const item of remainingItems) {
+    history[item.month] = item.value;
+  }
+
+  // Recalculate and update nextUpdate
+  const nextUpdate = calculateNextUpdate(history, account.updateFrequency);
+  await accounts.put({ ...account, nextUpdate });
+
+  return res.ok({ success: true, nextUpdate });
 });
 
 // GET /accounts/:id/buckets - get buckets for an account
@@ -263,6 +283,7 @@ api.register(deleteAccount, async (req, res, ctx) => {
 api.register(postAccount, async (req, res, ctx) => {
   const { userId } = await ctx.getUser();
   const accountId = random.id();
+  const nextUpdate = calculateNextUpdate(req.history, req.updateFrequency);
 
   const account = await accounts.put({
     userId,
@@ -271,6 +292,7 @@ api.register(postAccount, async (req, res, ctx) => {
     type: req.type,
     currency: req.currency,
     createdAt: Date.now(),
+    nextUpdate,
     ...(req.updateFrequency && { updateFrequency: req.updateFrequency }),
   });
 
