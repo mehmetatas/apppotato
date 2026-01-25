@@ -1,0 +1,12 @@
+{
+  "name": "spendish",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:basiq": "npx tsx test-basiq-api.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}
