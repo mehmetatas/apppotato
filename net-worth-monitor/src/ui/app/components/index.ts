@@ -20,6 +20,7 @@ export { HomePageSkeleton } from "./HomePageSkeleton";
 export { InlineTextEditor } from "./InlineTextEditor";
 export { Input } from "./Input";
 export { Modal } from "./Modal";
+export { MoneyDisplay } from "./MoneyDisplay";
 export { MoneyInput } from "./MoneyInput";
 export { NewAccountForm } from "./NewAccountForm";
 export { NoDataPlaceholder } from "./NoDataPlaceholder";

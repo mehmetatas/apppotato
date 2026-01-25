@@ -1,14 +1,23 @@
+import { cache } from "@broccoliapps/browser";
 import { ChevronRight, CreditCard, TrendingUp } from "lucide-preact";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto } from "../../../shared/api-contracts/dto";
-import { formatCurrency } from "../../../shared/currency";
 import { AppLink } from "../SpaApp";
+import { MoneyDisplay } from "./MoneyDisplay";
 
 type AccountCardProps = {
   account: AccountDto;
-  latestValue?: number;
+  value?: number; // Original value in account's currency
 };
 
-export const AccountCard = ({ account, latestValue }: AccountCardProps) => {
+export const AccountCard = ({
+  account,
+  value,
+}: AccountCardProps) => {
+  const user = cache.get<AuthUserDto>("user");
+  const targetCurrency = user?.targetCurrency || "USD";
+  const showOriginal = account.currency !== targetCurrency;
+
   return (
     <AppLink
       href={`/accounts/${account.id}`}
@@ -21,14 +30,25 @@ export const AccountCard = ({ account, latestValue }: AccountCardProps) => {
         {account.type === "asset" ? <TrendingUp size={24} /> : <CreditCard size={24} />}
       </div>
       <div class="flex-1 min-w-0">
-        <div class="flex items-baseline justify-between gap-2">
+        <div class="flex items-center justify-between gap-2">
           <span class="font-medium text-neutral-900 dark:text-neutral-100 truncate">
             {account.name}
           </span>
-          {latestValue !== undefined && (
-            <span class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 shrink-0">
-              {formatCurrency(latestValue, account.currency)}
-            </span>
+          {value !== undefined && (
+            <div class="text-right shrink-0">
+              <MoneyDisplay
+                amount={value}
+                currency={account.currency}
+                convert={true}
+              />
+              {showOriginal && (
+                <MoneyDisplay
+                  amount={value}
+                  currency={account.currency}
+                  size="sm"
+                />
+              )}
+            </div>
           )}
         </div>
       </div>

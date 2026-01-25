@@ -1,4 +1,5 @@
 import type { AccountDto } from "../../../shared/api-contracts/dto";
+import { type ExchangeRateMap, convertValue } from "./currencyConversion";
 import { generateMonthRangeAscending, getCurrentMonth } from "./dateUtils";
 
 type HistoryItem = { month: string; value: number };
@@ -160,4 +161,93 @@ export const getLatestValue = (
     .sort(([a], [b]) => b.localeCompare(a));
 
   return entries[0]?.[1];
+};
+
+/**
+ * Calculate net worth by month with currency conversion
+ * All values are converted to the target currency using exchange rates
+ */
+export const calculateNetWorthWithConversion = (
+  accounts: AccountDto[],
+  accountHistories: Record<string, Record<string, number>>,
+  exchangeRates: ExchangeRateMap,
+  targetCurrency: string
+): Record<string, number> => {
+  const currentMonth = getCurrentMonth();
+
+  // Find earliest month from all account histories
+  let earliestMonth = currentMonth;
+  for (const account of accounts) {
+    const history = accountHistories[account.id];
+    if (history) {
+      for (const month of Object.keys(history)) {
+        if (month < earliestMonth) {
+          earliestMonth = month;
+        }
+      }
+    }
+  }
+
+  // Generate all months from earliest to current
+  const sortedMonths = generateMonthRangeAscending(earliestMonth, currentMonth);
+
+  // For archived accounts, find their last month with data
+  const lastMonthWithData: Record<string, string> = {};
+  for (const account of accounts) {
+    if (account.archivedAt) {
+      const history = accountHistories[account.id];
+      if (history) {
+        const months = Object.keys(history).sort((a, b) => b.localeCompare(a));
+        if (months.length > 0) {
+          lastMonthWithData[account.id] = months[0]!;
+        }
+      }
+    }
+  }
+
+  // Calculate net worth by month with carry-forward and conversion
+  const netWorthByMonth: Record<string, number> = {};
+  const lastKnownValue: Record<string, number> = {};
+
+  for (const month of sortedMonths) {
+    let total = 0;
+    for (const account of accounts) {
+      const history = accountHistories[account.id];
+      const isArchived = !!account.archivedAt;
+
+      if (history && history[month] !== undefined) {
+        lastKnownValue[account.id] = history[month];
+      }
+
+      // For archived accounts, don't carry forward past their last data point
+      let value = 0;
+      if (isArchived) {
+        const lastMonth = lastMonthWithData[account.id];
+        if (lastMonth && month <= lastMonth) {
+          value = lastKnownValue[account.id] ?? 0;
+        }
+        // else: month is after last data point, value stays 0
+      } else {
+        value = lastKnownValue[account.id] ?? 0;
+      }
+
+      // Convert value to target currency
+      const convertedValue = convertValue(
+        value,
+        account.currency,
+        month,
+        exchangeRates,
+        targetCurrency
+      );
+
+      if (account.type === "asset") {
+        total += convertedValue;
+      } else {
+        total -= convertedValue;
+      }
+    }
+    netWorthByMonth[month] = total;
+  }
+
+  return netWorthByMonth;
 };

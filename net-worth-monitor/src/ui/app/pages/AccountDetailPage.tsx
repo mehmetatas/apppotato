@@ -1,8 +1,9 @@
+import { cache } from "@broccoliapps/browser";
 import { Trash2 } from "lucide-preact";
 import { route } from "preact-router";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
-import { getCurrencySymbol } from "../../../shared/currency";
 import {
   deleteAccount,
   getAccountDetail,
@@ -16,11 +17,13 @@ import {
   BucketPicker,
   ConfirmActionModal,
   HistoryEditor,
+  MoneyDisplay,
   PageHeader,
   RemoveAccountModal,
   ValueChart,
 } from "../components";
-import { useModal } from "../hooks";
+import { useExchangeRates, useModal } from "../hooks";
+import { convertValue, getEarliestMonth } from "../utils/currencyConversion";
 
 type AccountDetailPageProps = {
   id?: string;
@@ -53,6 +56,40 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
   const [deleting, setDeleting] = useState(false);
 
   const [unarchiving, setUnarchiving] = useState(false);
+
+  // Currency toggle state
+  const [showConverted, setShowConverted] = useState(false);
+  const user = cache.get<AuthUserDto>("user");
+  const targetCurrency = user?.targetCurrency || "USD";
+
+  // Get earliest month for exchange rates
+  const earliestMonth = useMemo(() => {
+    return getEarliestMonth({ account: originalHistory });
+  }, [originalHistory]);
+
+  // Fetch exchange rates if account currency differs from target
+  const currenciesToFetch = account?.currency && account.currency !== targetCurrency
+    ? [account.currency]
+    : [];
+  const { rates: exchangeRates } = useExchangeRates(
+    currenciesToFetch,
+    targetCurrency,
+    earliestMonth
+  );
+
+  // Convert history values when showing converted currency
+  const displayHistory = useMemo(() => {
+    if (!showConverted || !exchangeRates || !account) {
+      return editedHistory;
+    }
+    const converted: Record<string, number | undefined> = {};
+    for (const [month, value] of Object.entries(editedHistory)) {
+      if (value !== undefined) {
+        converted[month] = convertValue(value, account.currency, month, exchangeRates, targetCurrency);
+      }
+    }
+    return converted;
+  }, [editedHistory, showConverted, exchangeRates, account, targetCurrency]);
 
   // Helper: Update history state from API response
   const updateHistoryFromResponse = (
@@ -304,12 +341,14 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
       <div class="space-y-6">
         <div>
           <div class="mb-4">
-            <span class="text-4xl font-bold text-neutral-900 dark:text-neutral-100">
-              {getCurrencySymbol(account.currency)}{latestValue.toLocaleString()}
-            </span>
-            <span class="ml-2 text-lg text-neutral-500 dark:text-neutral-400">
-              {account.currency}
-            </span>
+            <MoneyDisplay
+              amount={latestValue}
+              currency={account.currency}
+              convert={showConverted}
+              size="xl"
+              toggler={true}
+              onToggle={() => setShowConverted(!showConverted)}
+            />
           </div>
 
           {isArchived && (
@@ -329,9 +368,9 @@ export const AccountDetailPage = ({ id }: AccountDetailPageProps) => {
 
           <div class="mb-4">
             <ValueChart
-              data={editedHistory}
+              data={displayHistory}
               variant={account.type === "debt" ? "negative" : "default"}
-              currency={account.currency}
+              currency={showConverted ? targetCurrency : account.currency}
             />
           </div>
 

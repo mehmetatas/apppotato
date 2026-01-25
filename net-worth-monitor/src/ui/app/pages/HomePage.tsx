@@ -3,10 +3,12 @@ import { route } from "preact-router";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto, BucketDto } from "../../../shared/api-contracts/dto";
-import { getCurrencySymbol } from "../../../shared/currency";
 import { getDashboard } from "../api";
-import { AccountList, BucketFilterPills, HomePageSkeleton, NewAccountForm, ValueChart } from "../components";
-import { calculateNetWorth } from "../utils/historyUtils";
+import { AccountList, BucketFilterPills, HomePageSkeleton, MoneyDisplay, NewAccountForm, ValueChart } from "../components";
+import { useExchangeRates } from "../hooks/useExchangeRates";
+import { convertLatestValues, getEarliestMonth, getUniqueCurrencies } from "../utils/currencyConversion";
+import { getCurrentMonth } from "../utils/dateUtils";
+import { calculateNetWorthWithConversion } from "../utils/historyUtils";
 
 export const HomePage = () => {
   // Redirect to onboarding if user has no currency set
@@ -66,6 +68,25 @@ export const HomePage = () => {
     fetchData();
   }, []);
 
+  const targetCurrency = user?.targetCurrency || "USD";
+
+  // Extract unique currencies that need conversion
+  const currenciesToConvert = useMemo(() => {
+    return getUniqueCurrencies(accounts, targetCurrency);
+  }, [accounts, targetCurrency]);
+
+  // Find earliest month from account histories
+  const earliestMonth = useMemo(() => {
+    return getEarliestMonth(accountHistories);
+  }, [accountHistories]);
+
+  // Fetch exchange rates for all currencies
+  const { rates: exchangeRates, loading: ratesLoading } = useExchangeRates(
+    currenciesToConvert,
+    targetCurrency,
+    earliestMonth
+  );
+
   // Filter accounts based on selected bucket (hide archived accounts from display)
   const filteredAccounts = useMemo(() => {
     const activeAccounts = accounts.filter((a) => !a.archivedAt);
@@ -88,13 +109,48 @@ export const HomePage = () => {
     return accounts.filter((a) => bucketAccountIds.includes(a.id));
   }, [accounts, selectedBucketId, accountsByBucket]);
 
-  // Calculate net worth data (includes archived accounts with different carry-forward logic)
+  // Calculate net worth data with currency conversion
   const netWorthData = useMemo(() => {
-    return calculateNetWorth(accountsForNetWorth, accountHistories);
-  }, [accountsForNetWorth, accountHistories]);
+    if (!exchangeRates) {
+      return {};
+    }
+    return calculateNetWorthWithConversion(
+      accountsForNetWorth,
+      accountHistories,
+      exchangeRates,
+      targetCurrency
+    );
+  }, [accountsForNetWorth, accountHistories, exchangeRates, targetCurrency]);
 
-  // Filtered latest values for display
+  // Convert latest values to target currency
+  const convertedLatestValues = useMemo(() => {
+    if (!exchangeRates) {
+      return {};
+    }
+    const currentMonth = getCurrentMonth();
+    return convertLatestValues(
+      accounts,
+      latestValues,
+      currentMonth,
+      exchangeRates,
+      targetCurrency
+    );
+  }, [accounts, latestValues, exchangeRates, targetCurrency]);
+
+  // Filtered latest values for display (converted)
   const filteredLatestValues = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const account of filteredAccounts) {
+      const value = convertedLatestValues[account.id];
+      if (value !== undefined) {
+        result[account.id] = value;
+      }
+    }
+    return result;
+  }, [filteredAccounts, convertedLatestValues]);
+
+  // Filtered original values for display
+  const filteredOriginalValues = useMemo(() => {
     const result: Record<string, number> = {};
     for (const account of filteredAccounts) {
       const value = latestValues[account.id];
@@ -105,7 +161,7 @@ export const HomePage = () => {
     return result;
   }, [filteredAccounts, latestValues]);
 
-  if (loading) {
+  if (loading || ratesLoading) {
     return <HomePageSkeleton />;
   }
 
@@ -141,19 +197,14 @@ export const HomePage = () => {
       />
 
       <div class="mb-4">
-        <span class="text-4xl font-bold text-neutral-900 dark:text-neutral-100">
-          {getCurrencySymbol(user?.targetCurrency || "USD")}{currentNetWorth.toLocaleString()}
-        </span>
-        <span class="ml-2 text-lg text-neutral-500 dark:text-neutral-400">
-          {user?.targetCurrency || "USD"}
-        </span>
+        <MoneyDisplay amount={currentNetWorth} currency={targetCurrency} size="xl" />
       </div>
 
       <div className="mb-6">
         <ValueChart
           data={netWorthData}
           variant={isNegative ? "negative" : "default"}
-          currency={user?.targetCurrency || "USD"}
+          currency={targetCurrency}
         />
       </div>
 
@@ -172,13 +223,15 @@ export const HomePage = () => {
               title="Assets"
               accounts={filteredAccounts.filter((a) => a.type === "asset")}
               latestValues={filteredLatestValues}
-              currency={user?.targetCurrency || "USD"}
+              originalValues={filteredOriginalValues}
+              displayCurrency={targetCurrency}
             />
             <AccountList
               title="Debts"
               accounts={filteredAccounts.filter((a) => a.type === "debt")}
               latestValues={filteredLatestValues}
-              currency={user?.targetCurrency || "USD"}
+              originalValues={filteredOriginalValues}
+              displayCurrency={targetCurrency}
             />
           </div>
         )

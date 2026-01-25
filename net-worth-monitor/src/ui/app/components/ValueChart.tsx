@@ -1,4 +1,4 @@
-import type { ChartArea, ScriptableContext } from "chart.js";
+import type { ChartArea, ScriptableContext, TooltipModel } from "chart.js";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -10,10 +10,13 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
+import { useRef } from "preact/hooks";
+import { render } from "preact";
 import { Line } from "react-chartjs-2";
 import { getCurrencySymbol } from "../../../shared/currency";
 import { formatMonthLabel } from "../utils/dateUtils";
 import { fillToCurrentMonth } from "../utils/historyUtils";
+import { MoneyDisplay } from "./MoneyDisplay";
 import { NoDataPlaceholder } from "./NoDataPlaceholder";
 
 ChartJS.register(
@@ -79,6 +82,52 @@ const createGradient = (
 
 export const ValueChart = ({ data, variant = "default", currency = "USD" }: ValueChartProps) => {
   const currencySymbol = getCurrencySymbol(currency);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // External tooltip handler
+  const externalTooltipHandler = (context: { chart: ChartJS; tooltip: TooltipModel<"line"> }) => {
+    const { chart, tooltip } = context;
+    const tooltipEl = tooltipRef.current;
+    if (!tooltipEl) return;
+
+    // Hide if no tooltip
+    if (tooltip.opacity === 0) {
+      tooltipEl.style.opacity = "0";
+      return;
+    }
+
+    // Get data point
+    const dataPoint = tooltip.dataPoints?.[0];
+    if (!dataPoint) {
+      tooltipEl.style.opacity = "0";
+      return;
+    }
+
+    const value = dataPoint.parsed.y;
+    const label = dataPoint.label;
+
+    if (value === null) {
+      tooltipEl.style.opacity = "0";
+      return;
+    }
+
+    // Render MoneyDisplay into tooltip
+    render(
+      <div class="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg px-3 py-2">
+        <div class="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{label}</div>
+        <MoneyDisplay amount={value} currency={currency} size="sm" />
+      </div>,
+      tooltipEl
+    );
+
+    // Position tooltip
+    const position = chart.canvas.getBoundingClientRect();
+    tooltipEl.style.opacity = "1";
+    tooltipEl.style.left = position.left + window.scrollX + tooltip.caretX + "px";
+    tooltipEl.style.top = position.top + window.scrollY + tooltip.caretY - 10 + "px";
+    tooltipEl.style.transform = "translate(-50%, -100%)";
+  };
+
   // Fill gaps to current month, then filter to only entries with defined values and sort by date
   const filledData = fillToCurrentMonth(data);
   const entries = Object.entries(filledData)
@@ -146,13 +195,8 @@ export const ValueChart = ({ data, variant = "default", currency = "USD" }: Valu
     plugins: {
       legend: { display: false },
       tooltip: {
-        enabled: true,
-        callbacks: {
-          label: (context: { parsed: { y: number | null } }) => {
-            const value = context.parsed.y;
-            return value != null ? currencySymbol + value.toLocaleString() : "";
-          },
-        },
+        enabled: false,
+        external: externalTooltipHandler,
       },
     },
     scales: {
@@ -175,8 +219,13 @@ export const ValueChart = ({ data, variant = "default", currency = "USD" }: Valu
   };
 
   return (
-    <div class="h-64 p-2 bg-white dark:bg-black rounded-lg">
+    <div class="relative h-64 p-2 bg-white dark:bg-black rounded-lg">
       <Line data={chartData} options={options} />
+      <div
+        ref={tooltipRef}
+        class="fixed pointer-events-none z-50 transition-opacity duration-150"
+        style={{ opacity: 0 }}
+      />
     </div>
   );
 };

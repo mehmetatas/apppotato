@@ -1,14 +1,22 @@
+import { cache } from "@broccoliapps/browser";
 import { CreditCard, Wallet } from "lucide-preact";
+import type { AuthUserDto } from "../../../shared/api-contracts";
 import type { AccountDto } from "../../../shared/api-contracts/dto";
-import { formatCurrency } from "../../../shared/currency";
 import { AppLink } from "../SpaApp";
+import { MoneyDisplay } from "./MoneyDisplay";
 
 type ArchivedAccountCardProps = {
   account: AccountDto;
-  maxValue: number;
+  maxValue: number; // Original value in account's currency
 };
 
-export const ArchivedAccountCard = ({ account, maxValue }: ArchivedAccountCardProps) => {
+export const ArchivedAccountCard = ({
+  account,
+  maxValue,
+}: ArchivedAccountCardProps) => {
+  const user = cache.get<AuthUserDto>("user");
+  const targetCurrency = user?.targetCurrency || "USD";
+  const showOriginal = account.currency !== targetCurrency;
   const isAsset = account.type === "asset";
   const Icon = isAsset ? Wallet : CreditCard;
 
@@ -29,9 +37,18 @@ export const ArchivedAccountCard = ({ account, maxValue }: ArchivedAccountCardPr
         </p>
       </div>
       <div class="text-right">
-        <p class={`font-semibold ${isAsset ? "text-teal-600 dark:text-teal-400" : "text-amber-600 dark:text-amber-400"}`}>
-          {formatCurrency(maxValue, account.currency)}
-        </p>
+        <MoneyDisplay
+          amount={maxValue}
+          currency={account.currency}
+          convert={true}
+        />
+        {showOriginal && (
+          <MoneyDisplay
+            amount={maxValue}
+            currency={account.currency}
+            size="sm"
+          />
+        )}
         <p class="text-xs text-neutral-500 dark:text-neutral-400">
           {isAsset ? "peak value" : "paid off"}
         </p>
