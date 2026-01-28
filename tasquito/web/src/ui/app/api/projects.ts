@@ -1,0 +1,120 @@
+import { cache } from "@broccoliapps/browser";
+import {
+  archiveProject as archiveProjectApi,
+  deleteProject as deleteProjectApi,
+  getProject as getProjectApi,
+  getProjects as getProjectsApi,
+  patchProject as patchProjectApi,
+  postProject as postProjectApi,
+  unarchiveProject as unarchiveProjectApi,
+  type ProjectDto,
+  type ProjectSummaryDto,
+  type ProjectWithTasksDto,
+} from "@broccoliapps/tasquito-shared";
+import { CACHE_KEYS, sessionStorage } from "./cache";
+
+// Helper functions for cache management
+const getAllProjectsFromCache = (): ProjectSummaryDto[] => {
+  const keys = cache.keys(CACHE_KEYS.projectPrefix, sessionStorage);
+  const projects: ProjectSummaryDto[] = [];
+  for (const key of keys) {
+    const project = cache.get<ProjectSummaryDto>(key, sessionStorage);
+    if (project) projects.push(project);
+  }
+  return projects;
+};
+
+const setProjectInCache = (project: ProjectSummaryDto | ProjectDto) => {
+  // Ensure task counts are present for cache
+  const projectWithCounts: ProjectSummaryDto = {
+    ...project,
+    openTaskCount: "openTaskCount" in project ? project.openTaskCount : 0,
+    totalTaskCount: "totalTaskCount" in project ? project.totalTaskCount : 0,
+  };
+  cache.set(CACHE_KEYS.project(project.id), projectWithCounts, undefined, sessionStorage);
+};
+
+const setAllProjectsInCache = (projects: ProjectSummaryDto[]) => {
+  for (const project of projects) {
+    setProjectInCache(project);
+  }
+};
+
+const removeProjectFromCache = (id: string) => {
+  cache.remove(CACHE_KEYS.project(id), sessionStorage);
+};
+
+// GET /projects - list all projects with cache
+export const getProjects = async (): Promise<{ projects: ProjectSummaryDto[] }> => {
+  const projectsFetched = cache.get<boolean>(CACHE_KEYS.projectsFetched, sessionStorage);
+  if (projectsFetched) {
+    const projects = getAllProjectsFromCache();
+    if (projects.length > 0) return { projects };
+  }
+
+  const data = await getProjectsApi.invoke({});
+  setAllProjectsInCache(data.projects);
+  cache.set(CACHE_KEYS.projectsFetched, true, undefined, sessionStorage);
+  return data;
+};
+
+// GET /projects/:id - get single project with tasks
+export const getProject = async (id: string): Promise<{ project: ProjectWithTasksDto }> => {
+  // Always fetch fresh for detail view (has tasks)
+  const data = await getProjectApi.invoke({ id });
+  return data;
+};
+
+// POST /projects - create project with cache update
+export const postProject = async (data: { name: string }): Promise<{ project: ProjectDto }> => {
+  const result = await postProjectApi.invoke(data);
+  setProjectInCache(result.project);
+  return result;
+};
+
+// PATCH /projects/:id - update project with cache update
+export const patchProject = async (data: { id: string; name?: string }): Promise<{ project: ProjectDto }> => {
+  const result = await patchProjectApi.invoke(data);
+  // Update cache - preserve task counts from existing cache if available
+  const existing = cache.get<ProjectSummaryDto>(CACHE_KEYS.project(result.project.id), sessionStorage);
+  setProjectInCache({
+    ...result.project,
+    openTaskCount: existing?.openTaskCount ?? 0,
+    totalTaskCount: existing?.totalTaskCount ?? 0,
+  });
+  return result;
+};
+
+// DELETE /projects/:id - delete project with cache update
+export const deleteProject = async (id: string): Promise<void> => {
+  await deleteProjectApi.invoke({ id });
+  removeProjectFromCache(id);
+  // Also clear any cached tasks for this project
+  cache.removeByPrefix(CACHE_KEYS.taskPrefix(id), sessionStorage);
+  cache.remove(CACHE_KEYS.tasksFetched(id), sessionStorage);
+};
+
+// POST /projects/:id/archive - archive project with cache update
+export const archiveProject = async (id: string): Promise<{ project: ProjectDto }> => {
+  const result = await archiveProjectApi.invoke({ id });
+  // Update the project in cache with archived status
+  setProjectInCache(result.project);
+  // Also clear any cached tasks for this project
+  cache.removeByPrefix(CACHE_KEYS.taskPrefix(id), sessionStorage);
+  cache.remove(CACHE_KEYS.tasksFetched(id), sessionStorage);
+  return result;
+};
+
+// POST /projects/:id/unarchive - unarchive project with cache update
+export const unarchiveProject = async (id: string): Promise<{ project: ProjectDto }> => {
+  const result = await unarchiveProjectApi.invoke({ id });
+  // Update the project in cache with unarchived status
+  setProjectInCache(result.project);
+  return result;
+};
+
+// Invalidate all projects cache
+export const invalidateProjectsCache = () => {
+  cache.removeByPrefix(CACHE_KEYS.projectPrefix, sessionStorage);
+  cache.remove(CACHE_KEYS.projectsFetched, sessionStorage);
+};

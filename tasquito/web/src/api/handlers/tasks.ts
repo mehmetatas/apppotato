@@ -1,31 +1,151 @@
 import { HttpError } from "@broccoliapps/backend";
 import { random } from "@broccoliapps/shared";
-import { tasks } from "../../db/tasks";
+import { generateKeyBetween } from "fractional-indexing";
+import { tasks, type Task } from "../../db/tasks";
 import {
   deleteTask,
   getTask,
   getTasks,
   patchTask,
+  postSubtask,
   postTask,
 } from "@broccoliapps/tasquito-shared";
 import { api } from "../lambda";
 
-// GET /tasks/:id - get single task
+// Ensure task has a sortOrder (for backward compatibility with existing data)
+const ensureSortOrder = (task: Task): Task & { sortOrder: string } => ({
+  ...task,
+  sortOrder: task.sortOrder ?? generateKeyBetween(null, null),
+});
+
+// POST /projects/:projectId/tasks - create task
+api.register(postTask, async (req, res, ctx) => {
+  const { userId } = await ctx.getUser();
+  const taskId = random.id();
+  const now = Date.now();
+  const status = req.status ?? "todo";
+
+  // Get existing tasks to determine sortOrder
+  const existingTasks = await tasks.query({ userId, projectId: req.projectId }).all();
+  const parentTasks = existingTasks.filter((t) => !t.parentId && t.status === status);
+  const sortedTasks = parentTasks.sort((a, b) => {
+    const aOrder = a.sortOrder ?? "";
+    const bOrder = b.sortOrder ?? "";
+    return aOrder < bOrder ? -1 : aOrder > bOrder ? 1 : 0;
+  });
+  const lastTask = sortedTasks.at(-1);
+  const lastSortOrder = lastTask?.sortOrder ?? null;
+  const sortOrder = generateKeyBetween(lastSortOrder, null);
+
+  const task = await tasks.put({
+    userId,
+    projectId: req.projectId,
+    id: taskId,
+    title: req.title,
+    description: req.description,
+    dueDate: req.dueDate,
+    status,
+    sortOrder,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // Create subtasks if provided
+  const createdSubtasks = [];
+  if (req.subtasks?.length) {
+    let prevSubtaskOrder: string | null = null;
+    for (const subtaskTitle of req.subtasks) {
+      const subtaskSortOrder = generateKeyBetween(prevSubtaskOrder, null);
+      const subtask = await tasks.put({
+        userId,
+        projectId: req.projectId,
+        id: random.id(),
+        parentId: taskId,
+        title: subtaskTitle,
+        status: "todo",
+        sortOrder: subtaskSortOrder,
+        createdAt: now,
+        updatedAt: now,
+      });
+      createdSubtasks.push(subtask);
+      prevSubtaskOrder = subtaskSortOrder;
+    }
+  }
+
+  return res.ok({
+    task: ensureSortOrder(task),
+    subtasks: createdSubtasks.length > 0 ? createdSubtasks.map(ensureSortOrder) : undefined,
+  });
+});
+
+// POST /projects/:projectId/tasks/:taskId/subtasks - create subtask
+api.register(postSubtask, async (req, res, ctx) => {
+  const { userId } = await ctx.getUser();
+
+  // Verify parent task exists
+  const parentTask = await tasks.get({ userId, projectId: req.projectId }, { id: req.taskId });
+  if (!parentTask) {
+    throw new HttpError(404, "Parent task not found");
+  }
+
+  // Verify parent is not already a subtask (max 2 levels)
+  if (parentTask.parentId) {
+    throw new HttpError(400, "Cannot create subtask of a subtask");
+  }
+
+  // Get existing subtasks to determine sortOrder
+  const allTasks = await tasks.query({ userId, projectId: req.projectId }).all();
+  const existingSubtasks = allTasks.filter((t) => t.parentId === req.taskId);
+  const sortedSubtasks = existingSubtasks.sort((a, b) => {
+    const aOrder = a.sortOrder ?? "";
+    const bOrder = b.sortOrder ?? "";
+    return aOrder < bOrder ? -1 : aOrder > bOrder ? 1 : 0;
+  });
+  const lastSubtask = sortedSubtasks.at(-1);
+  const lastSubtaskSortOrder = lastSubtask?.sortOrder ?? null;
+  const sortOrder = generateKeyBetween(lastSubtaskSortOrder, null);
+
+  const subtaskId = random.id();
+  const now = Date.now();
+
+  const subtask = await tasks.put({
+    userId,
+    projectId: req.projectId,
+    id: subtaskId,
+    parentId: req.taskId,
+    title: req.title,
+    status: "todo",
+    sortOrder,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return res.ok({ task: ensureSortOrder(subtask) });
+});
+
+// GET /projects/:projectId/tasks - list all tasks in project
+api.register(getTasks, async (req, res, ctx) => {
+  const { userId } = await ctx.getUser();
+  const result = await tasks.query({ userId, projectId: req.projectId }).all();
+  return res.ok({ tasks: result.map(ensureSortOrder) });
+});
+
+// GET /projects/:projectId/tasks/:id - get single task
 api.register(getTask, async (req, res, ctx) => {
   const { userId } = await ctx.getUser();
-  const task = await tasks.get({ userId }, { id: req.id });
+  const task = await tasks.get({ userId, projectId: req.projectId }, { id: req.id });
 
   if (!task) {
     throw new HttpError(404, "Task not found");
   }
 
-  return res.ok({ task });
+  return res.ok({ task: ensureSortOrder(task) });
 });
 
-// PATCH /tasks/:id - update task
+// PATCH /projects/:projectId/tasks/:id - update task
 api.register(patchTask, async (req, res, ctx) => {
   const { userId } = await ctx.getUser();
-  const task = await tasks.get({ userId }, { id: req.id });
+  const task = await tasks.get({ userId, projectId: req.projectId }, { id: req.id });
 
   if (!task) {
     throw new HttpError(404, "Task not found");
@@ -34,49 +154,41 @@ api.register(patchTask, async (req, res, ctx) => {
   const updatedTask = {
     ...task,
     ...(req.title !== undefined && { title: req.title }),
+    ...(req.description !== undefined && { description: req.description }),
+    ...(req.dueDate !== undefined && { dueDate: req.dueDate ?? undefined }),
     ...(req.status !== undefined && { status: req.status }),
+    ...(req.sortOrder !== undefined && { sortOrder: req.sortOrder }),
     updatedAt: Date.now(),
   };
 
   const updated = await tasks.put(updatedTask);
 
-  return res.ok({ task: updated });
+  return res.ok({ task: ensureSortOrder(updated) });
 });
 
-// DELETE /tasks/:id - delete task
+// DELETE /projects/:projectId/tasks/:id - delete task (cascades to subtasks)
 api.register(deleteTask, async (req, res, ctx) => {
   const { userId } = await ctx.getUser();
-  const task = await tasks.get({ userId }, { id: req.id });
+  const task = await tasks.get({ userId, projectId: req.projectId }, { id: req.id });
 
   if (!task) {
     throw new HttpError(404, "Task not found");
   }
 
-  await tasks.delete({ userId }, { id: req.id });
+  // If this is a parent task, delete all subtasks first
+  if (!task.parentId) {
+    const allTasks = await tasks.query({ userId, projectId: req.projectId }).all();
+    const subtasks = allTasks.filter((t) => t.parentId === task.id);
+
+    await Promise.all(
+      subtasks.map((subtask) =>
+        tasks.delete({ userId, projectId: req.projectId }, { id: subtask.id })
+      )
+    );
+  }
+
+  // Delete the task
+  await tasks.delete({ userId, projectId: req.projectId }, { id: req.id });
+
   return res.noContent();
-});
-
-// POST /tasks - create task
-api.register(postTask, async (req, res, ctx) => {
-  const { userId } = await ctx.getUser();
-  const taskId = random.id();
-  const now = Date.now();
-
-  const task = await tasks.put({
-    userId,
-    id: taskId,
-    title: req.title,
-    status: req.status ?? "todo",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  return res.ok({ task });
-});
-
-// GET /tasks - list all tasks
-api.register(getTasks, async (_, res, ctx) => {
-  const { userId } = await ctx.getUser();
-  const result = await tasks.query({ userId }).all();
-  return res.ok({ tasks: result });
 });

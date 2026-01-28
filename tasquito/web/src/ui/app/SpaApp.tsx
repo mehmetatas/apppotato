@@ -3,7 +3,7 @@ import type { AnchorHTMLAttributes, ComponentType } from "preact";
 import Router, { type RoutableProps } from "preact-router";
 import { CACHE_KEYS } from "./api/cache";
 import { Layout } from "./layout/Layout";
-import { AuthCallback, HomePage, TaskDetailPage } from "./pages";
+import { AuthCallback, HomePage, ProjectDetailPage, SettingsPage } from "./pages";
 
 // Route component that wraps page with Layout based on withLayout prop
 const AppRoute = ({
@@ -27,7 +27,8 @@ type RouteConfig = { page: ComponentType<any>; withLayout?: boolean };
 const ROUTES: Record<string, RouteConfig> = {
   "/": { page: HomePage },
   "/auth/callback": { page: AuthCallback, withLayout: false },
-  "/tasks/:id": { page: TaskDetailPage },
+  "/projects/:id": { page: ProjectDetailPage },
+  "/settings": { page: SettingsPage },
 };
 
 const appPath = (path: string) => APP_BASE + (path === "/" ? "" : path);

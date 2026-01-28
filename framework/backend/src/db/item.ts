@@ -32,6 +32,11 @@ export const buildSK = (typeName: string, skFields: string[], item: Record<strin
   return sk;
 };
 
+// Check if all fields have defined (non-null/non-undefined) values
+const allFieldsDefined = (fields: string[], record: Record<string, unknown>): boolean => {
+  return fields.every((field) => record[field] != null);
+};
+
 // DDB internal fields to strip from results
 const DDB_FIELDS = [
   "pk",
@@ -67,10 +72,15 @@ export const toDdbItem = <T>(config: ItemConfig, item: T): DdbItem<T> => {
     _type: config.typeName,
   };
 
-  // Add GSI keys
+  // Add GSI keys only if all fields are defined
   for (const [, gsiConfig] of Object.entries(config.gsis)) {
-    ddbItem[`${gsiConfig.index}_pk`] = buildPK(config.typeName, gsiConfig.pk, record);
-    ddbItem[`${gsiConfig.index}_sk`] = buildSK(config.typeName, gsiConfig.sk, record);
+    const allPkDefined = allFieldsDefined(gsiConfig.pk, record);
+    const allSkDefined = allFieldsDefined(gsiConfig.sk, record);
+
+    if (allPkDefined && allSkDefined) {
+      ddbItem[`${gsiConfig.index}_pk`] = buildPK(config.typeName, gsiConfig.pk, record);
+      ddbItem[`${gsiConfig.index}_sk`] = buildSK(config.typeName, gsiConfig.sk, record);
+    }
   }
 
   return ddbItem as DdbItem<T>;

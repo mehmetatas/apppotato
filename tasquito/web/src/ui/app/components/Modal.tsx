@@ -10,7 +10,7 @@ type ModalProps = {
   confirmText?: string;
   cancelText?: string;
   onConfirm?: () => void;
-  confirmVariant?: "primary" | "danger";
+  confirmVariant?: "primary" | "danger" | "warning";
   isLoading?: boolean;
 };
 
@@ -56,17 +56,17 @@ export const Modal = ({
       <div class="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+      <div class="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
         {/* Header */}
-        <div class="px-6 py-4 border-b border-neutral-200">
-          <h2 class="text-lg font-semibold text-neutral-900">{title}</h2>
+        <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
+          <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
         </div>
 
         {/* Content */}
         <div class="px-6 py-4">{children}</div>
 
         {/* Footer */}
-        <div class="px-6 py-4 bg-neutral-50 border-t border-neutral-200 flex justify-end gap-3">
+        <div class="px-6 py-4 bg-neutral-50 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-700 flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose} disabled={isLoading}>
             {cancelText}
           </Button>

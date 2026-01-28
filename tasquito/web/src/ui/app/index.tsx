@@ -5,12 +5,23 @@ import { render } from "preact";
 import { refreshToken } from "@broccoliapps/tasquito-shared";
 import { CACHE_KEYS } from "./api/cache";
 import { App } from "./SpaApp";
+import { applyTheme, getStoredTheme } from "./utils/themeUtils";
 
 // CSS import for Vite HMR in development only
 // In production, CSS is loaded via <link> tag in AppHtml.tsx
 if (import.meta.env.DEV) {
   import("./app.css");
 }
+
+// Apply theme on initial load
+applyTheme();
+
+// Listen for system theme changes
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (getStoredTheme() === "system") {
+    applyTheme();
+  }
+});
 
 // Configure access token getter for authenticated API requests
 setTokenProvider({

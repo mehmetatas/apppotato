@@ -13,7 +13,7 @@ export const Layout = ({ children, skip = false }: LayoutProps) => {
   }
 
   return (
-    <div class="flex flex-col min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-200">
+    <div class="flex flex-col min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-200 dark:from-neutral-900 dark:to-neutral-950">
       <Header />
       <main class="flex-1 py-8 px-4 max-w-3xl mx-auto w-full">{children}</main>
       <Footer />

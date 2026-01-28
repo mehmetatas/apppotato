@@ -553,6 +553,33 @@ describe("table", () => {
         }),
       });
     });
+
+    it("should not include GSI keys when GSI fields are undefined", async () => {
+      const { executePut } = await import("./client");
+      vi.mocked(executePut).mockClear();
+
+      type Task = { id: string; projectId: string; parentId?: string };
+      const tasks = table<Task>("task", "test-table")
+        .key(["projectId"], ["id"])
+        .gsi1("byParent", ["projectId"], ["parentId"])
+        .build();
+
+      await tasks.put({ id: "123", projectId: "proj1" }); // parentId is undefined
+
+      expect(executePut).toHaveBeenCalledWith({
+        tableName: "test-table",
+        item: expect.objectContaining({
+          pk: "task#projectId#proj1",
+          sk: "id#123",
+          _type: "task",
+        }),
+      });
+
+      // Verify GSI keys are NOT present
+      const calledItem = vi.mocked(executePut).mock.calls[0]![0].item;
+      expect(calledItem).not.toHaveProperty("gsi1_pk");
+      expect(calledItem).not.toHaveProperty("gsi1_sk");
+    });
   });
 
   describe("get", () => {

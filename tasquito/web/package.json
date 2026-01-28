@@ -28,6 +28,7 @@
     "@tailwindcss/postcss": "^4.1.11",
     "@types/aws-lambda": "^8.10.159",
     "@types/node": "^25.0.3",
+    "@types/sortablejs": "^1.15.9",
     "aws-cdk-lib": "^2.234.0",
     "concurrently": "^9.2.1",
     "constructs": "^10.4.4",
@@ -47,11 +48,13 @@
     "@broccoliapps/shared": "*",
     "@broccoliapps/tasquito-shared": "*",
     "@hono/valibot-validator": "^0.6.1",
+    "fractional-indexing": "^3.2.0",
     "hono": "^4.11.3",
     "lucide-preact": "^0.562.0",
     "preact": "^10.28.2",
     "preact-render-to-string": "^6.6.5",
     "preact-router": "^4.1.2",
+    "sortablejs": "^1.15.6",
     "valibot": "^1.2.0"
   }
 }

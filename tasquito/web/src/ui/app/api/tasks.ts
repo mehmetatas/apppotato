@@ -4,6 +4,7 @@ import {
   getTask as getTaskApi,
   getTasks as getTasksApi,
   patchTask as patchTaskApi,
+  postSubtask as postSubtaskApi,
   postTask as postTaskApi,
   type TaskDto,
 } from "@broccoliapps/tasquito-shared";
@@ -12,8 +13,8 @@ import { CACHE_KEYS, sessionStorage } from "./cache";
 type Task = TaskDto;
 
 // Helper functions for cache management
-const getAllTasksFromCache = (): Task[] => {
-  const keys = cache.keys(CACHE_KEYS.taskPrefix, sessionStorage);
+const getAllTasksFromCache = (projectId: string): Task[] => {
+  const keys = cache.keys(CACHE_KEYS.taskPrefix(projectId), sessionStorage);
   const tasks: Task[] = [];
   for (const key of keys) {
     const task = cache.get<Task>(key, sessionStorage);
@@ -23,7 +24,7 @@ const getAllTasksFromCache = (): Task[] => {
 };
 
 const setTaskInCache = (task: Task) => {
-  cache.set(CACHE_KEYS.task(task.id), task, undefined, sessionStorage);
+  cache.set(CACHE_KEYS.task(task.projectId, task.id), task, undefined, sessionStorage);
 };
 
 const setAllTasksInCache = (tasks: Task[]) => {
@@ -32,46 +33,65 @@ const setAllTasksInCache = (tasks: Task[]) => {
   }
 };
 
-const removeTaskFromCache = (id: string) => {
-  cache.remove(CACHE_KEYS.task(id), sessionStorage);
+const removeTaskFromCache = (projectId: string, id: string) => {
+  cache.remove(CACHE_KEYS.task(projectId, id), sessionStorage);
 };
 
-// GET /tasks - list all tasks with cache
-export const getTasks = async (): Promise<{ tasks: Task[] }> => {
-  const tasksFetched = cache.get<boolean>(CACHE_KEYS.tasksFetched, sessionStorage);
+// GET /projects/:projectId/tasks - list all tasks in project with cache
+export const getTasks = async (projectId: string): Promise<{ tasks: Task[] }> => {
+  const tasksFetched = cache.get<boolean>(CACHE_KEYS.tasksFetched(projectId), sessionStorage);
   if (tasksFetched) {
-    const tasks = getAllTasksFromCache();
+    const tasks = getAllTasksFromCache(projectId);
     if (tasks.length > 0) return { tasks };
   }
 
-  const data = await getTasksApi.invoke({});
+  const data = await getTasksApi.invoke({ projectId });
   setAllTasksInCache(data.tasks);
-  cache.set(CACHE_KEYS.tasksFetched, true, undefined, sessionStorage);
+  cache.set(CACHE_KEYS.tasksFetched(projectId), true, undefined, sessionStorage);
   return data;
 };
 
-// GET /tasks/:id - get single task with cache
-export const getTask = async (id: string): Promise<{ task: Task }> => {
-  const cachedTask = cache.get<Task>(CACHE_KEYS.task(id), sessionStorage);
+// GET /projects/:projectId/tasks/:id - get single task with cache
+export const getTask = async (projectId: string, id: string): Promise<{ task: Task }> => {
+  const cachedTask = cache.get<Task>(CACHE_KEYS.task(projectId, id), sessionStorage);
   if (cachedTask) {
     return { task: cachedTask };
   }
 
-  const data = await getTaskApi.invoke({ id });
+  const data = await getTaskApi.invoke({ projectId, id });
   setTaskInCache(data.task);
   return data;
 };
 
-// POST /tasks - create task with cache update
-export const postTask = async (
-  ...args: Parameters<typeof postTaskApi.invoke>
+// POST /projects/:projectId/tasks - create task with cache update
+export const postTask = async (data: {
+  projectId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  status?: "todo" | "done";
+  subtasks?: string[];
+}): Promise<{ task: Task; subtasks?: Task[] }> => {
+  const result = await postTaskApi.invoke(data);
+  setTaskInCache(result.task);
+  if (result.subtasks) {
+    setAllTasksInCache(result.subtasks);
+  }
+  return result;
+};
+
+// POST /projects/:projectId/tasks/:taskId/subtasks - create subtask with cache update
+export const postSubtask = async (
+  projectId: string,
+  taskId: string,
+  title: string
 ): Promise<{ task: Task }> => {
-  const result = await postTaskApi.invoke(...args);
+  const result = await postSubtaskApi.invoke({ projectId, taskId, title });
   setTaskInCache(result.task);
   return result;
 };
 
-// PATCH /tasks/:id - update task with cache update
+// PATCH /projects/:projectId/tasks/:id - update task with cache update
 export const patchTask = async (
   ...args: Parameters<typeof patchTaskApi.invoke>
 ): Promise<{ task: Task }> => {
@@ -80,14 +100,14 @@ export const patchTask = async (
   return result;
 };
 
-// DELETE /tasks/:id - delete task with cache update
-export const deleteTask = async (id: string): Promise<void> => {
-  await deleteTaskApi.invoke({ id });
-  removeTaskFromCache(id);
+// DELETE /projects/:projectId/tasks/:id - delete task with cache update
+export const deleteTask = async (projectId: string, id: string): Promise<void> => {
+  await deleteTaskApi.invoke({ projectId, id });
+  removeTaskFromCache(projectId, id);
 };
 
-// Invalidate all tasks cache
-export const invalidateTasksCache = () => {
-  cache.removeByPrefix(CACHE_KEYS.taskPrefix, sessionStorage);
-  cache.remove(CACHE_KEYS.tasksFetched, sessionStorage);
+// Invalidate tasks cache for a project
+export const invalidateTasksCache = (projectId: string) => {
+  cache.removeByPrefix(CACHE_KEYS.taskPrefix(projectId), sessionStorage);
+  cache.remove(CACHE_KEYS.tasksFetched(projectId), sessionStorage);
 };

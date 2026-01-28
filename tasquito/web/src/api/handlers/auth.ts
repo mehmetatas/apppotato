@@ -1,6 +1,7 @@
 import { auth, HttpError, log } from "@broccoliapps/backend";
 import { Duration, globalConfig } from "@broccoliapps/shared";
 import { users } from "../../db/users";
+import { initializeNewUser } from "../../db/initializeNewUser";
 import { authExchange, refreshToken, type AuthUserDto } from "@broccoliapps/tasquito-shared";
 import { api } from "../lambda";
 
@@ -37,6 +38,9 @@ api.register(authExchange, async (req, res) => {
       createdAt: now,
       updatedAt: now,
     });
+
+    // Initialize new user with tutorial project
+    await initializeNewUser(existingUser.id);
   }
 
   const authUser: AuthUserDto = {

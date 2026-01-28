@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 
-type ButtonVariant = "primary" | "secondary" | "danger";
+type ButtonVariant = "primary" | "secondary" | "danger" | "warning";
 type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonProps = Omit<JSX.HTMLAttributes<HTMLButtonElement>, "size"> & {
@@ -13,8 +13,9 @@ type ButtonProps = Omit<JSX.HTMLAttributes<HTMLButtonElement>, "size"> & {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: "bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500",
-  secondary: "bg-neutral-200 text-neutral-800 hover:bg-neutral-300 focus:ring-neutral-400",
+  secondary: "bg-neutral-200 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-300 dark:hover:bg-neutral-600 focus:ring-neutral-400",
   danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+  warning: "bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-400",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
