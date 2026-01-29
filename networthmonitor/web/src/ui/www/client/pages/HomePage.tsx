@@ -1,6 +1,7 @@
 import { cache } from "@broccoliapps/browser";
 import { globalConfig } from "@broccoliapps/shared";
 import { useEffect, useState } from "preact/hooks";
+import { CACHE_KEYS } from "../../../app/api/cache";
 import { sendMagicLink } from "../../../../shared/api-contracts";
 
 type EmailStatus = "idle" | "sending" | "sent" | "error";
@@ -155,7 +156,7 @@ export const HomePage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const refreshToken = cache.get<string>("refreshToken");
+    const refreshToken = cache.get<string>(CACHE_KEYS.refreshToken);
     setIsAuthenticated(!!refreshToken);
   }, []);
 

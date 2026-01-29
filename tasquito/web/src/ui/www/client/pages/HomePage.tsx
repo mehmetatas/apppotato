@@ -1,6 +1,8 @@
+import { cache } from "@broccoliapps/browser";
 import { globalConfig } from "@broccoliapps/shared";
 import { sendMagicLink } from "@broccoliapps/tasquito-shared";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { CACHE_KEYS } from "../../../app/api/cache";
 
 const GoogleIcon = () => (
   <svg class="h-5 w-5" viewBox="0 0 24 24">
@@ -160,6 +162,16 @@ const AuthCard = ({ onClose }: { onClose?: () => void }) => {
 
 export const HomePage = () => {
   const [showModal, setShowModal] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const refreshToken = cache.get<string>(CACHE_KEYS.refreshToken);
+    setIsAuthenticated(!!refreshToken);
+  }, []);
+
+  const goToApp = () => {
+    window.location.href = "/app";
+  };
 
   return (
     <div class="flex min-h-screen">
@@ -194,22 +206,35 @@ export const HomePage = () => {
       {/* Right half - CTA (desktop only) */}
       <div class="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gray-50 p-8">
         <div class="w-full max-w-md">
-          <AuthCard />
+          {isAuthenticated ? (
+            <div class="rounded-xl bg-white p-8 shadow-lg text-center">
+              <h2 class="mb-4 text-2xl font-semibold text-gray-900">Welcome Back</h2>
+              <p class="mb-6 text-gray-600">You're already signed in.</p>
+              <button
+                onClick={goToApp}
+                class="w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition hover:bg-emerald-700"
+              >
+                Go to App
+              </button>
+            </div>
+          ) : (
+            <AuthCard />
+          )}
         </div>
       </div>
 
       {/* Mobile sticky button */}
       <div class="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-emerald-900 to-transparent lg:hidden">
         <button
-          onClick={() => setShowModal(true)}
+          onClick={isAuthenticated ? goToApp : () => setShowModal(true)}
           class="w-full rounded-lg bg-white px-4 py-4 font-semibold text-emerald-600 shadow-lg transition hover:bg-gray-50"
         >
-          Get Started
+          {isAuthenticated ? "Go to App" : "Get Started"}
         </button>
       </div>
 
       {/* Mobile bottom sheet modal */}
-      {showModal && (
+      {showModal && !isAuthenticated && (
         <div class="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
           <div class="absolute inset-0 bg-black/50" onClick={() => setShowModal(false)} />
