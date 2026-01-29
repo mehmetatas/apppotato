@@ -110,7 +110,7 @@ const buildClient = async ({ name, entry, cssEntry }: ClientConfig) => {
 
   // Build CSS with PostCSS
   console.log(`  ${cssEntry} → dist/static/${cssFileName}`);
-  const monorepoRoot = path.join(rootDir, "..");
+  const monorepoRoot = path.join(rootDir, "../..");
   const postcssPath = path.join(monorepoRoot, "node_modules/.bin/postcss");
   execSync(`"${postcssPath}" "${path.join(rootDir, cssEntry)}" -o "${path.join(outDir, cssFileName)}"`, {
     stdio: "inherit",

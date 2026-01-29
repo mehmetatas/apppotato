@@ -7,7 +7,7 @@ import { render } from "../render";
 page
   .withRequest({
     app: v.picklist(Object.keys(globalConfig.apps)),
-    provider: v.picklist(["google"]),
+    provider: v.picklist(["google", "apple"]),
   })
   .handle("/auth", async (req) => {
     return render(<AuthPage app={req.app} provider={req.provider} />, {

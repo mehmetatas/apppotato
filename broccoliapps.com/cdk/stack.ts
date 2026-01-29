@@ -19,6 +19,12 @@ await app("broccoliapps-com")
       clientId: GOOGLE_CLIENT_ID,
       clientSecretSsmParam: "google-client-secret",
     },
+    apple: {
+      servicesId: "com.broccoliapps.service",
+      teamId: "U7M5529BM7",
+      keyId: "8SQMTZLN7Q",
+      privateKeySsmParam: "apple-private-key",
+    },
   })
   .withCloudFrontFn(path.join(__dirname, "cloudfront-fn.js"))
   .withLambdaOrigin("/*", path.join(__dirname, "../dist/ssr")) // SSR (default)
