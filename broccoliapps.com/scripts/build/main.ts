@@ -72,6 +72,23 @@ const buildLambda = async ({ entry, outdir, forbiddenDeps }: LambdaConfig) => {
   fs.writeFileSync(path.join(outdir, "package.json"), JSON.stringify({ type: "module" }, null, 2));
 };
 
+const copyStaticAssets = () => {
+  const srcDir = path.join(rootDir, "static");
+  const destDir = path.join(rootDir, "dist/static");
+
+  // Ensure destination directory exists
+  fs.mkdirSync(destDir, { recursive: true });
+
+  // Copy all files from static/ to dist/static/
+  const files = fs.readdirSync(srcDir);
+  for (const file of files) {
+    const srcPath = path.join(srcDir, file);
+    const destPath = path.join(destDir, file);
+    fs.copyFileSync(srcPath, destPath);
+    console.log(`  static/${file} → dist/static/${file}`);
+  }
+};
+
 const buildClient = async () => {
   const jsFileName = buildId ? `app.${buildId}.js` : "app.js";
   const cssFileName = buildId ? `app.${buildId}.css` : "app.css";
@@ -110,6 +127,10 @@ const buildClient = async () => {
     minify: !isDevBuild,
     outfile: path.join(outDir, cssFileName),
   });
+
+  // Copy static assets
+  console.log("\n  Copying static assets...");
+  copyStaticAssets();
 
   console.log(`\n  Build ID: ${buildId || "(dev)"}`);
 };

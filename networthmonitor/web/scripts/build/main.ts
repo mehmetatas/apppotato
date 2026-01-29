@@ -118,6 +118,23 @@ const buildClient = async ({ name, entry, cssEntry }: ClientConfig) => {
   });
 };
 
+const copyStaticAssets = () => {
+  const srcDir = path.join(rootDir, "static");
+  const destDir = path.join(rootDir, "dist/static");
+
+  // Ensure destination directory exists
+  fs.mkdirSync(destDir, { recursive: true });
+
+  // Copy all files from static/ to dist/static/
+  const files = fs.readdirSync(srcDir);
+  for (const file of files) {
+    const srcPath = path.join(srcDir, file);
+    const destPath = path.join(destDir, file);
+    fs.copyFileSync(srcPath, destPath);
+    console.log(`  static/${file} → dist/static/${file}`);
+  }
+};
+
 const build = async () => {
   console.log("Building Lambda functions...\n");
 
@@ -130,6 +147,9 @@ const build = async () => {
     await buildClient(client);
   }
   console.log(`\n  Build ID: ${buildId || "(dev)"}`);
+
+  console.log("\nCopying static assets...\n");
+  copyStaticAssets();
 
   console.log("\nDone!");
 };

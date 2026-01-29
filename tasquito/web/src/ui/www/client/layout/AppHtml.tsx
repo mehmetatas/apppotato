@@ -39,6 +39,7 @@ export const AppHtml = ({
           href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/static/logo-64.png" />
 
         {/* CSS - only load in production (Vite handles CSS in dev via JS import) */}
         {!isDevMode && <link rel="stylesheet" href={cssFile} />}

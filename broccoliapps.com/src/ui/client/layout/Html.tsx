@@ -7,6 +7,7 @@ export type HtmlProps = {
   title?: string;
   description?: string;
   pageProps?: Record<string, unknown>;
+  pageName?: string;
   staticPage?: boolean;
   skipLayout?: boolean;
   status?: number;
@@ -17,6 +18,7 @@ export const Html = ({
   title = "Broccoli Apps",
   description = "The healthy food aisle of software",
   pageProps,
+  pageName,
   staticPage = false,
   skipLayout = false,
   status = 200,
@@ -52,6 +54,8 @@ export const Html = ({
           rel="stylesheet"
         />
 
+        <link rel="icon" href="/static/logo-64.png" />
+
         {/* CSS - only load in production (Vite handles CSS in dev) */}
         {!isDevMode && <link rel="stylesheet" href={cssFile} />}
       </head>
@@ -63,10 +67,10 @@ export const Html = ({
         {/* Hydration scripts (only for non-static pages) */}
         {!staticPage && (
           <>
-            {/* Serialize page props for client hydration */}
+            {/* Serialize page data for client hydration */}
             <script
               dangerouslySetInnerHTML={{
-                __html: `window.__PAGE_PROPS__=${JSON.stringify(pageProps ?? {})};`,
+                __html: `window.__PAGE_PROPS__=${JSON.stringify(pageProps ?? {})};window.__PAGE_NAME__="${pageName ?? ""}";window.__SKIP_LAYOUT__=${skipLayout};`,
               }}
             />
 

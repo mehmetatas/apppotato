@@ -27,9 +27,16 @@ type PageOptions = {
 export const render = (element: VNode, options: PageOptions = {}): PageResponse => {
   const pageProps = element.props as Record<string, unknown>;
 
+  // Extract component name for client hydration
+  const pageName =
+    typeof element.type === "function"
+      ? element.type.displayName || element.type.name || "Unknown"
+      : "Unknown";
+
   const html = renderToString(
     <Html
       pageProps={pageProps}
+      pageName={pageName}
       title={options.title}
       status={options.status}
       staticPage={options.staticPage}
