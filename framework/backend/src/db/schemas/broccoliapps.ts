@@ -23,3 +23,13 @@ export type MagicLinkToken = {
 };
 
 export const magicLinkTokens = table<MagicLinkToken>("magicLinkToken").key(["token"]).build();
+
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export const users = table<User>("user").key(["id"]).gsi1("byEmail", ["email"]).build();

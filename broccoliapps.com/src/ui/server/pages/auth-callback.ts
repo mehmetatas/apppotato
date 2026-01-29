@@ -2,6 +2,7 @@ import { db, HttpError, log } from "@broccoliapps/backend";
 import { AppId, Cookie, Duration, globalConfig, random } from "@broccoliapps/shared";
 import * as v from "valibot";
 import { verifyAuthorizationCode } from "../../../auth/cognito-server";
+import { getOrCreateUser } from "../../../auth/users";
 import { page } from "../lambda";
 
 page
@@ -28,6 +29,9 @@ page
       };
     }
 
+    // Look up or create user in central users table
+    const user = await getOrCreateUser(result.email, result.name);
+
     const expires = Duration.minutes(1).fromNow();
 
     const authCode = await db.broccoliapps.authCodes.put({
@@ -36,7 +40,7 @@ page
       email: result.email,
       name: result.name,
       provider: result.provider,
-      userId: result.userId,
+      userId: user.id,
       expiresAt: expires.toMilliseconds(),
       ttl: expires.toSeconds(),
     });
