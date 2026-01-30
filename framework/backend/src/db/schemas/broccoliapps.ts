@@ -1,3 +1,4 @@
+// TODO: this needs to move to broccoliapps. we put it here thinking all repos will be used by an admin project but better we achive that with symlinks.
 import { table } from "../table";
 
 export type AuthCode = {

@@ -1,3 +1,5 @@
+import type { CacheProvider } from "@broccoliapps/shared";
+
 type CacheValue<T> = {
   value: T;
   expiresAt?: number; // epoch ms
@@ -70,4 +72,4 @@ const clear = (options?: CacheOptions): void => {
   getStorage(options?.storage).clear();
 };
 
-export const cache = { set, get, remove, removeByPrefix, keys, clear };
+export const cache: CacheProvider = { set, get, remove, removeByPrefix, keys, clear };
