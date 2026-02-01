@@ -1,7 +1,6 @@
-import { AppId, epoch, globalConfig, random } from "@broccoliapps/shared";
+import { centralVerifyAuth, epoch, globalConfig, random } from "@broccoliapps/shared";
 import { crypto } from "../crypto";
 import { tokens, users } from "../db/schemas/shared";
-import { HttpError } from "../http";
 import { log } from "../log";
 import { getAuthConfig } from "./config";
 import { jwt, JwtData } from "./jwt";
@@ -11,36 +10,15 @@ export type AuthTokens = { accessToken: string; refreshToken: string; user: JwtD
 const exchange = async (authCode: string): Promise<AuthTokens> => {
   const { appId } = getAuthConfig();
 
-  const code = await crypto.rsaPrivateEncrypt(appId, authCode);
-
-  const body = JSON.stringify({ app: appId, code });
-
-  const resp = await fetch(globalConfig.apps["broccoliapps-com"].baseUrl + "/api/v1/auth/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-amz-content-sha256": crypto.sha256(body) },
-    body,
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new HttpError(resp.status ?? 500, err.message ?? "Unable to exchange auth token");
-  }
-
-  const { user } = (await resp.json()) as { user: JwtData };
+  const { user } = await centralVerifyAuth.invoke(
+    { app: appId, code: authCode },
+    { baseUrl: globalConfig.apps["broccoliapps-com"].baseUrl }
+  );
 
   const accessToken = await createAccessToken(user);
   const refreshToken = await createRefreshToken(user.userId);
 
   return { accessToken, refreshToken, user };
-};
-
-const verifyAuthCode = (app: AppId, encrypted: string) => {
-  try {
-    return crypto.rsaPublicDecrypt(app, encrypted);
-  } catch (error) {
-    log.wrn("Could not decrypt auth code", { app, error });
-    return undefined;
-  }
 };
 
 const refresh = async (refreshToken: string): Promise<AuthTokens | undefined> => {
@@ -114,7 +92,6 @@ const generateTokens = async (data: JwtData): Promise<AuthTokens> => {
 
 export const authToken = {
   exchange,
-  verifyAuthCode,
   refresh,
   verifyAccessToken,
   generateTokens,

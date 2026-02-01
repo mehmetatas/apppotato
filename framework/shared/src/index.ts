@@ -1,5 +1,7 @@
 export * from "./auth";
 export * from "./auth.dto";
+export * from "./central-auth";
+export * from "./central-auth.dto";
 export * from "./coerce";
 export * from "./contract";
 export * from "./cookie";

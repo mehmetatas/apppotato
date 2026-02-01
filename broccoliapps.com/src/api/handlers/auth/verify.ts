@@ -1,19 +1,11 @@
-import { auth, HttpError, log } from "@broccoliapps/backend";
+import { HttpError, log } from "@broccoliapps/backend";
 import { authCodes } from "../../../db/schemas";
-import { AppId, isExpired } from "@broccoliapps/shared";
-import { verifyAuthToken } from "../../../shared/api-contracts";
+import { isExpired, centralVerifyAuth as verifyAuthToken } from "@broccoliapps/shared";
 import { api } from "../../lambda";
 
 api.register(verifyAuthToken, async (req, res) => {
   try {
-    const code = auth.verifyAuthCode(req.app as AppId, req.code);
-
-    if (!code) {
-      log.wrn("Invalid auth code", { req });
-      throw new HttpError(403, "Auth code could not be verified");
-    }
-
-    const authCode = await authCodes.get({ code });
+    const authCode = await authCodes.get({ code: req.code });
 
     if (!authCode || isExpired(authCode) || authCode.app !== req.app) {
       log.wrn("Invalid auth code", { authCode, req });

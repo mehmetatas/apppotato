@@ -1,24 +1,12 @@
-import { auth, HttpError, log, rateLimiter } from "@broccoliapps/backend";
+import { HttpError, log, rateLimiter } from "@broccoliapps/backend";
 import { magicLinkTokens } from "../../../db/schemas";
-import { AppId, Duration, random } from "@broccoliapps/shared";
+import { type AppId, Duration, random, centralSendEmail as sendMagicLink } from "@broccoliapps/shared";
 import { sendMagicLinkEmail } from "../../../email";
-import { sendMagicLink } from "../../../shared/api-contracts";
 import { api } from "../../lambda";
 
 api.register(sendMagicLink, async (req, res) => {
   try {
-    // 1. Verify S2S auth: app encrypts email with RSA private key, broccoliapps decrypts with public key
-    const decryptedEmail = auth.verifyAuthCode(req.app as AppId, req.code);
-
-    if (!decryptedEmail) {
-      throw new HttpError(403, "Auth code could not be verified");
-    }
-
-    if (decryptedEmail !== req.email) {
-      throw new HttpError(403, "Email does not match auth code");
-    }
-
-    // 2. Check rate limit (5 emails/hour/email address)
+    // 1. Check rate limit (5 emails/hour/email address)
     try {
       await rateLimiter.enforce(
         {
@@ -33,7 +21,7 @@ api.register(sendMagicLink, async (req, res) => {
       throw new HttpError(429, "Too many requests. Please try again later.");
     }
 
-    // 3. Generate 64-char random token, store with 15-min TTL
+    // 2. Generate 64-char random token, store with 15-min TTL
     const token = random.token(64);
     const expires = Duration.minutes(15).fromNow();
 
@@ -47,7 +35,7 @@ api.register(sendMagicLink, async (req, res) => {
       ttl: expires.toSeconds(),
     });
 
-    // 4. Send email
+    // 3. Send email
     await sendMagicLinkEmail({
       to: req.email,
       app: req.app as AppId,

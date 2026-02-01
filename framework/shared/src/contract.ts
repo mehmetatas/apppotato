@@ -1,5 +1,5 @@
-import * as v from "valibot";
 import { sha256 as jsSha256 } from "js-sha256";
+import * as v from "valibot";
 import type { HttpMethod, Schema } from "./types";
 
 // API Error class for client-side error handling
@@ -39,6 +39,13 @@ export const setTokenProvider = (provider: TokenProvider): void => {
   tokenProvider = provider;
 };
 
+// Global S2S provider for server-to-server authentication
+type S2SProvider = { appId: string; sign: (hash: string) => Promise<string> };
+let s2sProvider: S2SProvider | undefined;
+export const setS2SProvider = (provider: S2SProvider): void => {
+  s2sProvider = provider;
+};
+
 // Extract path param names from path (e.g., "/users/:id" -> ["id"])
 const extractPathParams = (path: string): string[] => {
   const matches = path.match(/:([^/]+)/g);
@@ -69,7 +76,8 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
     public readonly method: HttpMethod,
     public readonly path: string,
     public readonly schema: Schema<TReq>,
-    public readonly responseSchema?: ResponseSchema<TRes>
+    public readonly responseSchema?: ResponseSchema<TRes>,
+    public readonly isS2S: boolean = false
   ) { }
 
   /**
@@ -109,19 +117,35 @@ export class ApiContract<TReq extends Record<string, unknown>, TRes> {
     const headers: Record<string, string> = {};
     let body: string | undefined;
 
-    // Add access token if available (skip for auth endpoints like refresh)
-    if (!options?.skipAuth) {
-      const accessToken = await tokenProvider.get();
-      if (accessToken) {
-        headers["x-access-token"] = accessToken;
-      }
-    }
-
     if (hasBody) {
       body = JSON.stringify(remaining);
       headers["Content-Type"] = "application/json";
       // SHA256 hash required by CloudFront with IAM auth for POST/PUT
       headers["x-amz-content-sha256"] = await sha256(body);
+    }
+
+    // Auth: S2S signing OR access token (mutually exclusive)
+    if (this.isS2S) {
+      if (!s2sProvider) {
+        throw new ApiError(500, "S2S provider not configured");
+      }
+      
+      const timestamp = String(Date.now());
+      const payload: Record<string, string> = { appId: s2sProvider.appId, path: this.path, timestamp };
+      if (body !== undefined) {
+        payload.body = body;
+      }
+
+      const sorted = JSON.stringify(payload, Object.keys(payload).sort());
+      const signature = await s2sProvider.sign(await sha256(sorted));
+      headers["x-ba-request-timestamp"] = timestamp;
+      headers["x-ba-app"] = s2sProvider.appId;
+      headers["x-ba-signature"] = signature;
+    } else if (!options?.skipAuth) {
+      const accessToken = await tokenProvider.get();
+      if (accessToken) {
+        headers["x-access-token"] = accessToken;
+      }
     }
 
     const response = await fetch(url, {
@@ -151,21 +175,25 @@ export class ContractWithRequest<TReq extends Record<string, unknown>> extends A
   ): ApiContract<TReq, v.InferOutput<v.ObjectSchema<TEntries, undefined>>> {
     const responseSchema = v.object(entries);
     type TRes = v.InferOutput<typeof responseSchema>;
-    return new ApiContract<TReq, TRes>(this.method, this.path, this.schema, responseSchema);
+    return new ApiContract<TReq, TRes>(this.method, this.path, this.schema, responseSchema, this.isS2S);
   }
 }
 
 // Builder: initial state - IS a contract (defaults to void), can add .withRequest() or .withResponse()
 export class ContractBuilder extends ApiContract<EmptyRequest, void> {
-  constructor(method: HttpMethod, path: string) {
-    super(method, path, emptySchema);
+  constructor(method: HttpMethod, path: string, isS2S = false) {
+    super(method, path, emptySchema, undefined, isS2S);
+  }
+
+  s2s(): ContractBuilder {
+    return new ContractBuilder(this.method, this.path, true);
   }
 
   withRequest<TReq extends v.ObjectEntries>(
     entries: TReq
   ): ContractWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>> {
     const schema = v.object(entries);
-    return new ContractWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>>(this.method, this.path, schema);
+    return new ContractWithRequest<v.InferOutput<v.ObjectSchema<TReq, undefined>>>(this.method, this.path, schema, undefined, this.isS2S);
   }
 
   withResponse<TRes extends v.ObjectEntries>(
@@ -173,7 +201,7 @@ export class ContractBuilder extends ApiContract<EmptyRequest, void> {
   ): ApiContract<EmptyRequest, v.InferOutput<v.ObjectSchema<TRes, undefined>>> {
     const responseSchema = v.object(entries);
     type TResponse = v.InferOutput<typeof responseSchema>;
-    return new ApiContract<EmptyRequest, TResponse>(this.method, this.path, emptySchema, responseSchema);
+    return new ApiContract<EmptyRequest, TResponse>(this.method, this.path, emptySchema, responseSchema, this.isS2S);
   }
 }
 

@@ -1,8 +1,8 @@
-import { globalConfig, authExchange, refreshToken, sendMagicLink, verifyApple, type AuthUserDto, epoch } from "@broccoliapps/shared";
+import { globalConfig, authExchange, refreshToken, sendMagicLink, verifyApple, centralSendEmail, centralVerifyNative, type AuthUserDto, epoch, setS2SProvider } from "@broccoliapps/shared";
 import { crypto } from "../crypto";
 import { users } from "../db/schemas/shared";
 import { HttpError } from "../http";
-import { log } from "../log";
+
 import type { ApiRouter } from "../http/api-router";
 import { auth } from "./index";
 import { getAuthConfig } from "./config";
@@ -30,6 +30,12 @@ const ensureUser = async (data: JwtData): Promise<boolean> => {
 };
 
 export const registerAuthHandlers = (api: ApiRouter, options?: UseAuthOptions) => {
+  const { appId } = getAuthConfig();
+  setS2SProvider({
+    appId,
+    sign: (hash) => crypto.rsaPrivateEncrypt(appId, hash),
+  });
+
   api.register(authExchange, async (req, res) => {
     const result = await auth.exchange(req.code);
     const { accessTokenLifetime, refreshTokenLifetime } = getAuthConfig();
@@ -74,25 +80,11 @@ export const registerAuthHandlers = (api: ApiRouter, options?: UseAuthOptions) =
 
   api.register(sendMagicLink, async (req, res) => {
     const { appId } = getAuthConfig();
-    const code = await crypto.rsaPrivateEncrypt(appId, req.email);
 
-    const body = JSON.stringify({ app: appId, email: req.email, code, ...(req.platform && { platform: req.platform }) });
-    const resp = await fetch(
-      globalConfig.apps["broccoliapps-com"].baseUrl + "/api/v1/auth/email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-amz-content-sha256": crypto.sha256(body),
-        },
-        body,
-      }
+    await centralSendEmail.invoke(
+      { app: appId, email: req.email, ...(req.platform && { platform: req.platform }) },
+      { baseUrl: globalConfig.apps["broccoliapps-com"].baseUrl }
     );
-
-    if (!resp.ok) {
-      const err = (await resp.json()) as { message?: string };
-      throw new HttpError(resp.status, err.message || "Failed to send magic link");
-    }
 
     return res.ok({ success: true });
   });
@@ -110,37 +102,13 @@ export const registerAuthHandlers = (api: ApiRouter, options?: UseAuthOptions) =
       ? [givenName, familyName].filter(Boolean).join(" ")
       : applePayload.email.split("@")[0] ?? "User";
 
-    // 3. RSA-encrypt email with app's private key for S2S verification
-    const code = await crypto.rsaPrivateEncrypt(appId, applePayload.email);
-
-    // 4. Call broccoliapps verify-native to get/create central user
-    const verifyBody = JSON.stringify({
-      app: appId,
-      code,
-      email: applePayload.email,
-      name,
-      provider: "apple",
-    });
-    const verifyResp = await fetch(
-      globalConfig.apps["broccoliapps-com"].baseUrl + "/api/v1/auth/verify-native",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-amz-content-sha256": crypto.sha256(verifyBody),
-        },
-        body: verifyBody,
-      }
+    // 3. Call broccoliapps verify-native to get/create central user
+    const { user: centralUser } = await centralVerifyNative.invoke(
+      { app: appId, email: applePayload.email, name, provider: "apple" as const },
+      { baseUrl: globalConfig.apps["broccoliapps-com"].baseUrl }
     );
 
-    if (!verifyResp.ok) {
-      const err = (await verifyResp.json()) as { message?: string };
-      throw new HttpError(verifyResp.status, err.message || "Failed to verify native auth");
-    }
-
-    const { user: centralUser } = (await verifyResp.json()) as { user: { userId: string; email: string; name: string; provider: string } };
-
-    // 5. Generate tokens
+    // 4. Generate tokens
     const tokenData: JwtData = {
       userId: centralUser.userId,
       email: centralUser.email,
